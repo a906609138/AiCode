@@ -35,10 +35,19 @@ class ToolPermissionPolicyEngine @Inject constructor(
 ) {
     private companion object {
         /** 以 `command` 参数承载 shell 命令、按命令前缀做指令级匹配的工具。 */
-        val SHELL_TOOLS = setOf("Bash", SHIZUKU_TOOL)
+        val SHELL_TOOLS = setOf("Bash", SHIZUKU_TOOL, ROOT_TOOL)
 
         /** Shizuku 工具：以 adb shell 身份直接操作宿主 Android 系统，按高危处理（一律弹窗、不可记忆）。 */
         const val SHIZUKU_TOOL = "Shizuku"
+
+        /**
+         * Root 工具：以宿主 UID 0 执行命令，能力比 Shizuku 更高（可写系统分区、读写其它应用私有目录）。
+         * 与 Shizuku 同等对待：无论内置白名单或已记忆规则，一律 ASK 且不可记忆；AUTO 也不自动放行。
+         */
+        const val ROOT_TOOL = "Root"
+
+        /** 需要强制逐次确认、不能落「始终允许」记忆的高危宿主权限工具。 */
+        val HOST_PRIVILEGE_TOOLS = setOf(SHIZUKU_TOOL, ROOT_TOOL)
 
         /**
          * 合并后的终端会话工具：其 `start` 动作承载 shell 命令，需走指令级前缀匹配；
@@ -159,9 +168,14 @@ class ToolPermissionPolicyEngine @Inject constructor(
                     }
                 }
             }
-            // Shizuku 直接操作宿主系统，AUTO 下也不自动放行，仍需逐次确认（除非已开启「禁用安全拦截」）。
-            if (toolName == SHIZUKU_TOOL && !safetyDisabled) {
-                return EvalResult(Verdict.ASK, emptyList(), rememberDisabledReason = appContext.getString(R.string.tool_shizuku_confirmation_reason))
+            // Shizuku / Root 直接操作宿主系统，AUTO 下也不自动放行，仍需逐次确认（除非已开启「禁用安全拦截」）。
+            if (toolName in HOST_PRIVILEGE_TOOLS && !safetyDisabled) {
+                val reason = if (toolName == ROOT_TOOL) {
+                    appContext.getString(R.string.tool_root_confirmation_reason)
+                } else {
+                    appContext.getString(R.string.tool_shizuku_confirmation_reason)
+                }
+                return EvalResult(Verdict.ASK, emptyList(), rememberDisabledReason = reason)
             }
             return EvalResult(Verdict.ALLOW, emptyList())
         }
@@ -197,7 +211,7 @@ class ToolPermissionPolicyEngine @Inject constructor(
 
         val rules = loadRules(project).filter { it.toolName == toolName }
         return if (isShellTool(toolName, args)) {
-            evaluateShell(rules, args, forceAsk = toolName == SHIZUKU_TOOL)
+            evaluateShell(rules, args, forceAsk = toolName in HOST_PRIVILEGE_TOOLS)
         } else {
             evaluateGeneric(rules, capabilities)
         }
