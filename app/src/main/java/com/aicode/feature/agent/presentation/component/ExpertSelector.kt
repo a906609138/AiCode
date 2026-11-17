@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,6 +76,7 @@ internal fun ExpertIconButton(
 }
 
 /** 专家选择弹层：首项恒为「不使用专家」，避免用户选中后无法退回默认身份。 */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ExpertPickerSheet(
     experts: List<ExpertDefinition>,
