@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import com.aicode.feature.plugin.domain.PluginManager
 import javax.inject.Inject
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicLong
 import java.io.InterruptedIOException
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -56,6 +57,15 @@ class SlashCommandRegistry @Inject constructor(
     /** `/` 菜单展示的命令列表。 */
     val commands: StateFlow<List<SlashCommand>> = _commands.asStateFlow()
 
+    /**
+     * 刷新代际号：每次 [refresh] 进入即自增，落结果前校验自己仍是最新一代。
+     *
+     * 构造时会立即在后台刷一次（见 init），调用方也可能随时手动 [refresh]。多次刷新并发时，
+     * 先发起的那次若最后完成，会把旧快照（例如技能还没写入时的空列表）覆盖到 [commands] 上，
+     * 表现为 `/` 菜单短暂缺技能、单测偶发失败。用代际号丢弃过期结果，保证最后一次发起的结果胜出。
+     */
+    private val refreshGeneration = AtomicLong(0)
+
     private val refreshScope = CoroutineScope(
         SupervisorJob() + Dispatchers.IO +
             CoroutineExceptionHandler { _, e ->
@@ -74,18 +84,23 @@ class SlashCommandRegistry @Inject constructor(
 
     /** 重新扫描技能并重建菜单。涉及文件 IO，调用方应在 IO 上下文调用。 */
     suspend fun refresh(force: Boolean = false) = runInterruptible(Dispatchers.IO) {
+        // 进入即占号：本代之后若又发起了刷新，本次结果即为过期，直接丢弃（见 refreshGeneration）。
+        val generation = refreshGeneration.incrementAndGet()
         if (force) skillRepository.refreshDirectoryCache()
-        try {
-            skills = skillRepository.listSkills()
+        val latestSkills = try {
+            skillRepository.listSkills()
         } catch (error: IOException) {
             if (error is InterruptedIOException) throw error
-            skills = emptyList()
             if (error is RemoteAgentConfigIdentityChangedException) {
                 FileLogger.d(TAG, "斜杠命令技能清单等待连接就绪")
             } else {
                 FileLogger.w(TAG, "斜杠命令技能清单暂不可用", error)
             }
+            emptyList()
         }
+        // 过期结果不入库：避免先发起的刷新后完成，把旧快照覆盖到更新的快照上。
+        if (refreshGeneration.get() != generation) return@runInterruptible
+        skills = latestSkills
         _commands.value = buildCommands()
     }
 
