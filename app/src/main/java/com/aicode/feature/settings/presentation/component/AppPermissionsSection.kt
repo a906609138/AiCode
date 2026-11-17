@@ -81,6 +81,8 @@ internal fun AppPermissionsSection(
     var overlayAllowed by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
 
     var showStorageDeniedDialog by remember { mutableStateOf(false) }
+    // Root 工具开启前的二次确认弹窗状态（提在顶层，避免在 if 分支内 remember）。
+    var showRootConfirmDialog by remember { mutableStateOf(false) }
 
     // 从系统权限设置页返回时刷新状态。
     LifecycleResumeEffect(Unit) {
@@ -215,31 +217,30 @@ internal fun AppPermissionsSection(
             // Root 工具：仅在检测到设备已 root 时出现；默认关闭，开启需二次确认。
             if (rootAvailable) {
                 SettingsDivider()
-                var pendingRootEnable by remember { mutableStateOf(false) }
                 SettingsRow(
-                    icon = FeatherIcons.Unlock,
+                    icon = FeatherIcons.Shield,
                     title = stringResource(R.string.settings_root_tool),
                     subtitle = stringResource(
                         if (rootEnabled) R.string.settings_root_tool_enabled_hint
                         else R.string.settings_root_tool_hint
                     ),
-                    onClick = { if (!rootEnabled) pendingRootEnable = true },
+                    onClick = { if (!rootEnabled) showRootConfirmDialog = true },
                     trailing = {
                         AppSwitch(
                             checked = rootEnabled,
                             onCheckedChange = { checked ->
-                                if (checked) pendingRootEnable = true else onToggleRoot(false)
+                                if (checked) showRootConfirmDialog = true else onToggleRoot(false)
                             }
                         )
                     }
                 )
-                if (pendingRootEnable) {
+                if (showRootConfirmDialog) {
                     RootToolConfirmDialog(
                         onConfirm = {
-                            pendingRootEnable = false
+                            showRootConfirmDialog = false
                             onToggleRoot(true)
                         },
-                        onDismiss = { pendingRootEnable = false }
+                        onDismiss = { showRootConfirmDialog = false }
                     )
                 }
             }
@@ -545,7 +546,7 @@ private fun RootToolConfirmDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { Icon(FeatherIcons.Unlock, contentDescription = null) },
+        icon = { Icon(FeatherIcons.Shield, contentDescription = null) },
         title = { Text(stringResource(R.string.settings_root_tool_confirm_title)) },
         text = { Text(stringResource(R.string.settings_root_tool_confirm_message)) },
         confirmButton = {
