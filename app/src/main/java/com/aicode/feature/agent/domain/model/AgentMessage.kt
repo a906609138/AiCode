@@ -85,7 +85,12 @@ data class AgentContext(
      * 本会话绑定的自定义子代理定义；非空表示这是一个按定义运行的子代理会话，
      * 系统提示词与工具集都按其配置组装（见 [com.aicode.feature.agent.domain.prompt.SystemPromptProvider]）。
      */
-    val agentDefinition: AgentDefinition? = null
+    val agentDefinition: AgentDefinition? = null,
+    /**
+     * 本会话绑定的专家定义；非空表示当前会话以该专家的角色运行——提示词追加人设正文，
+     * 工具集按其白名单收窄。与 [agentDefinition] 互斥语义：子代理会话用前者，根会话用本条。
+     */
+    val expertDefinition: com.aicode.feature.agent.domain.expert.ExpertDefinition? = null
 ) {
     /**
      * 工具授权判定用的有效模式：goal 自主循环激活期间按 AUTO 放行（保留灾难性安全防护），

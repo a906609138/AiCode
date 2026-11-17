@@ -199,6 +199,17 @@ class SessionUseCase @Inject constructor(
         chatSessionDao.upsert(s.copy(mode = newMode.name, modeBeforePlan = modeBeforePlan))
     }
 
+    /**
+     * 为根会话绑定/解除专家：只写 [ChatSessionEntity.expertName]，定义正文在每轮组装提示词时现读。
+     * [name] 为 null 或空白表示「不使用专家」。
+     */
+    suspend fun updateExpert(sessionId: String, name: String?) {
+        val s = chatSessionDao.getById(sessionId) ?: return
+        val trimmed = name?.trim()?.takeIf { it.isNotEmpty() }
+        if (s.expertName == trimmed) return
+        chatSessionDao.upsert(s.copy(expertName = trimmed))
+    }
+
     suspend fun updateProviderModel(sessionId: String, providerId: String?, model: String?) {
         chatSessionDao.updateProviderModel(sessionId, providerId, model)
     }

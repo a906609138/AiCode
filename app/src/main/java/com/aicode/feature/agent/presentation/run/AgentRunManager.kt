@@ -139,6 +139,7 @@ class AgentRunManager @Inject constructor(
     private val subAgentEventBus: SubAgentEventBus,
     private val agentNotificationCenter: AgentNotificationCenter,
     private val agentDefinitionRepository: AgentDefinitionRepository,
+    private val expertDefinitionRepository: com.aicode.feature.agent.domain.expert.ExpertDefinitionRepository,
     @ApplicationContext private val context: Context
 ) {
 
@@ -1214,6 +1215,15 @@ class AgentRunManager @Inject constructor(
                     ?.subagentType
                     ?.let { agentDefinitionRepository.findIncludingDisabled(it) }
             }
+            // 专家只作用于根会话：子代理会话有自己的 agentDefinition，不再叠加角色。
+            val expertDefinition = withContext(Dispatchers.IO) {
+                if (sessionEntity?.parentId != null) {
+                    null
+                } else {
+                    sessionEntity?.expertName?.takeIf { it.isNotBlank() }
+                        ?.let { expertDefinitionRepository.findByName(it, projectRoot) }
+                }
+            }
 
             val agentContext = AgentContext(
                 currentFile = currentFile,
@@ -1230,7 +1240,8 @@ class AgentRunManager @Inject constructor(
                 goal = sessionDomain?.goal,
                 goalStatus = sessionDomain?.goalStatus,
                 reasoningEffort = sessionDomain?.reasoningEffort?.apiValue,
-                agentDefinition = agentDefinition
+                agentDefinition = agentDefinition,
+                expertDefinition = expertDefinition
             )
 
             val allTools = toolRegistry.getAvailableTools()
@@ -1240,6 +1251,10 @@ class AgentRunManager @Inject constructor(
             val tools = when {
                 agentDefinition != null -> {
                     val allowed = agentDefinition.filterToolNames(allTools.map { it.name }).toSet()
+                    allTools.filter { it.name in allowed }
+                }
+                expertDefinition != null -> {
+                    val allowed = expertDefinition.filterToolNames(allTools.map { it.name }).toSet()
                     allTools.filter { it.name in allowed }
                 }
                 isSub -> allTools.filterNot { it.name == AgentDefinition.NESTED_TOOL }

@@ -280,7 +280,37 @@ class SystemPromptProvider @Inject constructor(
         PromptFragmentResolver.numberedFragments(customDir).toMap()
     }
 
-    fun build(agentContext: AgentContext): String {
+    fun build(agentContext: AgentContext): String = withExpertBlock(agentContext, buildBase(agentContext))
+
+    /**
+     * 在主代理基线末尾追加专家人设块。
+     *
+     * 专家作用于当前会话、能看到完整历史，因此不改写基线（规则/项目/记忆照旧生效），
+     * 只在末尾叠加角色声明与人设正文；子代理会话（[AgentContext.agentDefinition] 非空）
+     * 不叠加专家，成员专家经 `task` 派发时由子代理路径自行注入。
+     */
+    private fun withExpertBlock(agentContext: AgentContext, base: String): String {
+        if (agentContext.agentDefinition != null) return base
+        val expert = agentContext.expertDefinition ?: return base
+        val block = buildString {
+            append("## 当前角色 (expert: ")
+            append(expert.title)
+            append(")\n\n")
+            append("本会话已绑定「")
+            append(expert.title)
+            append("」专家，按下面的人设与方法论作答；平台规则、工具权限与安全边界仍然有效。")
+            if (expert.isTeam) {
+                append("\n你是专家团团长：先拆解任务，再用 `task` 把子任务并行派给成员（")
+                append(expert.members.joinToString("、").ifBlank { "专家定义里未列成员" })
+                append("），最后核对并汇总成完整交付。")
+            }
+            append("\n\n")
+            append(expert.prompt.trim())
+        }
+        return collapseBlankLines("$base\n\n$block")
+    }
+
+    private fun buildBase(agentContext: AgentContext): String {
         agentContext.agentDefinition?.let { return buildForSubAgent(it, agentContext) }
 
         if (PromptFragmentResolver.isBuiltinDisabled(customDir)) {

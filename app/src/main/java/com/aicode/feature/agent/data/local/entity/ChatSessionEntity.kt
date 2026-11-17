@@ -38,7 +38,9 @@ data class ChatSessionEntity(
     /** 子代理会话：父会话 id；null 表示普通根会话。 */
     val parentId: String? = null,
     /** 子代理会话：派生子代理的类型（如 coder / researcher）；null 表示普通根会话。 */
-    val subagentType: String? = null
+    val subagentType: String? = null,
+    /** 根会话绑定的专家定义名（`experts/<name>.md`）；null 表示不召唤专家。 */
+    val expertName: String? = null
 ) {
     fun toDomain(): ChatSession = ChatSession(
         id = id,
@@ -61,7 +63,8 @@ data class ChatSessionEntity(
         lastInputTokens = lastInputTokens,
         isPinned = isPinned,
         parentId = parentId,
-        subagentType = subagentType
+        subagentType = subagentType,
+        expertName = expertName
     )
 
     companion object {
