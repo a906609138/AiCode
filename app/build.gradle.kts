@@ -102,7 +102,10 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.aicode"
+        // 改装版：改成独立包名，与官方 com.aicode 同机共存、互不覆盖。
+        // namespace 仍为 com.aicode（R 类与源码包名不变），只有安装身份变了。
+        // 代价：SettingsViewModel.inAppInstallSupported 返回 false，应用内更新入口自动隐藏。
+        applicationId = "com.aicode.aimini"
         minSdk = 26
         // 仍锁 targetSdk 28，但阻塞项已不是 PRoot：proot 全套改由 jniLibs 装到 nativeLibraryDir
         // （见 sourceSets 与 packaging.jniLibs 注释），W^X 不再挡容器启动。升级前待解决：
