@@ -161,6 +161,11 @@ internal fun ChatInputBar(
     providers: List<AIProviderConfig>,
     modelMetadata: Map<String, ModelMetadata>,
     onSelectModel: (String, String) -> Unit,
+    /** 可用专家（全局 + 项目级）；为空时按钮仍显示，便于用户知道有这个入口。 */
+    availableExperts: List<com.aicode.feature.agent.domain.expert.ExpertDefinition> = emptyList(),
+    /** 当前会话绑定的专家名；null 表示未召唤。 */
+    currentExpertName: String? = null,
+    onSelectExpert: (String?) -> Unit = {},
     currentMode: AgentMode,
     onToggleMode: (AgentMode) -> Unit,
     currentGoal: SessionGoalUi? = null,
@@ -608,6 +613,13 @@ internal fun ChatInputBar(
                             onSheetDismiss = onModelSheetDismiss,
                             runModelTest = onRunModelTest,
                             modifier = Modifier.onboardingTarget(OnboardingStep.OPEN_MODEL_PICKER)
+                        )
+
+                        ExpertIconButton(
+                            experts = availableExperts,
+                            currentExpertName = currentExpertName,
+                            onSelect = onSelectExpert,
+                            enabled = !isBusy
                         )
 
                         if (workspaceViewModel != null) {

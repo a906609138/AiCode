@@ -802,6 +802,8 @@ fun AIChatPanel(
     val currentWorkspace = workspaceViewModel?.current?.collectAsStateWithLifecycle()?.value
     val projectRoot = currentWorkspace?.path ?: ""
     val currentMode by viewModel.currentSessionMode.collectAsStateWithLifecycle()
+    val availableExperts by viewModel.availableExperts.collectAsStateWithLifecycle()
+    val currentExpertName by viewModel.currentSessionExpertName.collectAsStateWithLifecycle()
     val currentGoal by viewModel.currentSessionGoal.collectAsStateWithLifecycle()
     val slashCommands by viewModel.slashCommands.collectAsStateWithLifecycle()
     val fileMentionState by viewModel.fileMentionState.collectAsStateWithLifecycle()
@@ -1855,6 +1857,9 @@ fun AIChatPanel(
                 onSelectModel = { p, m ->
                     viewModel.setSessionProviderModel(p, m)
                 },
+                availableExperts = availableExperts,
+                currentExpertName = currentExpertName,
+                onSelectExpert = { viewModel.setSessionExpert(it) },
                 currentMode = currentMode,
                 onToggleMode = { viewModel.setSessionMode(it) },
                 currentGoal = currentGoal,

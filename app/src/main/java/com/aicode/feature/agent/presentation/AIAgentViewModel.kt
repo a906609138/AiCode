@@ -138,6 +138,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.debounce
@@ -217,6 +218,7 @@ class AIAgentViewModel @Inject constructor(
     private val subAgentEventBus: SubAgentEventBus,
     private val agentNotificationCenter: AgentNotificationCenter,
     private val agentDefinitionRepository: AgentDefinitionRepository,
+    private val expertDefinitionRepository: com.aicode.feature.agent.domain.expert.ExpertDefinitionRepository,
     private val todoItemDao: TodoItemDao,
     val fileAccess: FileAccessProvider,
     private val fileChangeHub: FileChangeHub,
@@ -1337,6 +1339,28 @@ class AIAgentViewModel @Inject constructor(
     val currentSessionMode: StateFlow<AgentMode> = currentSessionState.map { it?.mode ?: AgentMode.BUILD }
         .stateIn(viewModelScope, SharingStarted.Eagerly, AgentMode.BUILD)
 
+    /**
+     * 可用专家列表（全局 + 项目级，同名项目级优先）；召唤入口用。
+     *
+     * 与会话绑定解耦：只按当前工作区扫描一次目录，专家定义是磁盘文件，用户新增后重进设置页或
+     * 重启即可见。目录扫描失败降级为空列表，不影响对话。
+     */
+    val availableExperts: StateFlow<List<com.aicode.feature.agent.domain.expert.ExpertDefinition>> =
+        currentSessionState
+            .map { it?.workspacePath?.takeIf { p -> p.isNotBlank() } }
+            .distinctUntilChanged()
+            .map { root ->
+                withContext(Dispatchers.IO) {
+                    runCatching { expertDefinitionRepository.listAll(root) }.getOrDefault(emptyList())
+                }
+            }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** 当前会话绑定的专家名；null 表示未召唤专家。 */
+    val currentSessionExpertName: StateFlow<String?> = currentSessionState
+        .map { it?.expertName?.takeIf { name -> name.isNotBlank() } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     /** 当前会话的持续目标（goal）快照；null 表示未设定目标。 */
     val currentSessionGoal: StateFlow<SessionGoalUi?> = currentSessionState
         .map { s ->
@@ -1871,6 +1895,12 @@ class AIAgentViewModel @Inject constructor(
         }
         if (_currentSessionId.value == id) return
         updateSelectedSessionId(id)
+    }
+
+    /** 召唤/解除专家：写入会话绑定，下一轮开轮即按新人设与工具集生效。 */
+    fun setSessionExpert(name: String?) {
+        val sid = _currentSessionId.value ?: return
+        viewModelScope.launch { sessionUseCase.updateExpert(sid, name) }
     }
 
     fun setSessionMode(mode: AgentMode) {
