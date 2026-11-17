@@ -87,6 +87,7 @@ import com.aicode.feature.settings.data.repository.AppThemeMode
 import com.aicode.feature.settings.data.repository.BackgroundSettingsRepository
 import com.aicode.feature.settings.domain.model.AIProviderConfig
 import com.aicode.feature.settings.domain.model.ModelMetadata
+import com.aicode.feature.settings.presentation.RootViewModel
 import com.aicode.feature.settings.presentation.SettingsViewModel
 import com.aicode.feature.settings.presentation.ShizukuViewModel
 import com.aicode.feature.settings.presentation.SkillImportState
@@ -1429,11 +1430,18 @@ fun SettingsScreen(
                     val shizukuViewModel: ShizukuViewModel =
                         androidx.hilt.navigation.compose.hiltViewModel()
                     val shizukuState by shizukuViewModel.state.collectAsStateWithLifecycle()
+                    val rootViewModel: RootViewModel =
+                        androidx.hilt.navigation.compose.hiltViewModel()
+                    val rootState by rootViewModel.state.collectAsStateWithLifecycle()
                     AppPermissionsSection(
                         shizukuState = shizukuState,
                         onRequestShizukuPermission = { shizukuViewModel.requestPermission() },
                         onOpenShizuku = { shizukuViewModel.openShizukuApp() },
-                        onRefreshShizuku = { shizukuViewModel.refresh() }
+                        onRefreshShizuku = { shizukuViewModel.refresh() },
+                        rootAvailable = rootState.available,
+                        rootEnabled = rootState.enabled,
+                        onToggleRoot = { rootViewModel.setEnabled(it) },
+                        onRefreshRoot = { rootViewModel.refresh() }
                     )
                 }
                 SettingsSection.BackgroundRun -> BackgroundRunSection(

@@ -22,9 +22,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import com.aicode.core.ui.AdaptiveModalBottomSheet
 import com.aicode.core.ui.AppSwitch
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +52,7 @@ import compose.icons.feathericons.Shield
 import compose.icons.feathericons.Sun
 import compose.icons.feathericons.Terminal
 import compose.icons.feathericons.Zap
+import kotlinx.coroutines.delay
 
 /**
  * 「软件权限」二级页：集中展示并管理系统级权限。
@@ -63,7 +67,11 @@ internal fun AppPermissionsSection(
     shizukuState: ShizukuState,
     onRequestShizukuPermission: () -> Unit,
     onOpenShizuku: () -> Unit,
-    onRefreshShizuku: () -> Unit
+    onRefreshShizuku: () -> Unit,
+    rootAvailable: Boolean = false,
+    rootEnabled: Boolean = false,
+    onToggleRoot: (Boolean) -> Unit = {},
+    onRefreshRoot: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -204,6 +212,37 @@ internal fun AppPermissionsSection(
                     )
                 }
             )
+            // Root 工具：仅在检测到设备已 root 时出现；默认关闭，开启需二次确认。
+            if (rootAvailable) {
+                SettingsDivider()
+                var pendingRootEnable by remember { mutableStateOf(false) }
+                SettingsRow(
+                    icon = FeatherIcons.Unlock,
+                    title = stringResource(R.string.settings_root_tool),
+                    subtitle = stringResource(
+                        if (rootEnabled) R.string.settings_root_tool_enabled_hint
+                        else R.string.settings_root_tool_hint
+                    ),
+                    onClick = { if (!rootEnabled) pendingRootEnable = true },
+                    trailing = {
+                        AppSwitch(
+                            checked = rootEnabled,
+                            onCheckedChange = { checked ->
+                                if (checked) pendingRootEnable = true else onToggleRoot(false)
+                            }
+                        )
+                    }
+                )
+                if (pendingRootEnable) {
+                    RootToolConfirmDialog(
+                        onConfirm = {
+                            pendingRootEnable = false
+                            onToggleRoot(true)
+                        },
+                        onDismiss = { pendingRootEnable = false }
+                    )
+                }
+            }
         }
     }
 
@@ -483,4 +522,50 @@ private fun NetworkGuideSheet(onDismiss: () -> Unit) {
             }
         }
     }
+}
+/**
+ * Root 工具开启前的二次确认：能力最强（UID 0），误操作可能损坏设备或数据。
+ *
+ * 确认按钮带 [countdownSeconds] 秒倒计时，避免误触；倒计时结束前按钮不可点。
+ */
+@Composable
+private fun RootToolConfirmDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    countdownSeconds: Int = 5
+) {
+    var remaining by remember { mutableIntStateOf(countdownSeconds) }
+
+    LaunchedEffect(Unit) {
+        while (remaining > 0) {
+            delay(1_000)
+            remaining -= 1
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(FeatherIcons.Unlock, contentDescription = null) },
+        title = { Text(stringResource(R.string.settings_root_tool_confirm_title)) },
+        text = { Text(stringResource(R.string.settings_root_tool_confirm_message)) },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = remaining <= 0
+            ) {
+                Text(
+                    if (remaining > 0) {
+                        stringResource(R.string.settings_root_tool_confirm_countdown, remaining)
+                    } else {
+                        stringResource(R.string.common_confirm)
+                    }
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.common_cancel))
+            }
+        }
+    )
 }
