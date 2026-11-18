@@ -1250,24 +1250,35 @@ fun SettingsScreen(
                     onBatchSetEnabled = { targets, enabled -> viewModel.setMcpServersEnabled(targets, enabled) },
                     onBatchReconnect = { names -> viewModel.reconnectMcpServers(names) }
                 )
-                SettingsSection.Skills -> SkillsSection(
-                    projectName = currentProjectName,
-                    entries = skills,
-                    selection = selectionFor(SettingsSection.Skills),
-                    deletingInProgress = skillDeleting.isNotEmpty(),
-                    onDelete = { skillToDelete = it },
-                    onOpenDetail = {
-                        selectionFor(SettingsSection.Skills).exit()
-                        selectedSkill = it
-                        section = SettingsSection.SkillDetail
-                    },
-                    onBatchDelete = { targets ->
-                        viewModel.deleteSkills(targets.map { it.name to it.scope })
-                    },
-                    onBatchSetEnabled = { targets, enabled ->
-                        viewModel.setSkillsEnabled(targets.map { it.name to it.scope }, enabled)
+                SettingsSection.Skills -> {
+                    var showSkillStore by remember { mutableStateOf(false) }
+                    SkillsSection(
+                        projectName = currentProjectName,
+                        entries = skills,
+                        selection = selectionFor(SettingsSection.Skills),
+                        deletingInProgress = skillDeleting.isNotEmpty(),
+                        onDelete = { skillToDelete = it },
+                        onOpenDetail = {
+                            selectionFor(SettingsSection.Skills).exit()
+                            selectedSkill = it
+                            section = SettingsSection.SkillDetail
+                        },
+                        onBatchDelete = { targets ->
+                            viewModel.deleteSkills(targets.map { it.name to it.scope })
+                        },
+                        onBatchSetEnabled = { targets, enabled ->
+                            viewModel.setSkillsEnabled(targets.map { it.name to it.scope }, enabled)
+                        },
+                        onOpenStore = { showSkillStore = true }
+                    )
+                    if (showSkillStore) {
+                        SkillStoreSheet(onDismiss = {
+                            showSkillStore = false
+                            // 安装会写技能目录，返回时刷新列表
+                            viewModel.refreshSkills()
+                        })
                     }
-                )
+                }
                 SettingsSection.Prompts -> {
                     val promptsViewModel: com.aicode.feature.settings.presentation.PromptsViewModel =
                         androidx.hilt.navigation.compose.hiltViewModel()

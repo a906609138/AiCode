@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -68,7 +69,9 @@ internal fun SkillsSection(
     onDelete: (SkillUiEntry) -> Unit,
     onOpenDetail: (SkillUiEntry) -> Unit,
     onBatchDelete: (List<SkillUiEntry>) -> Unit,
-    onBatchSetEnabled: (List<SkillUiEntry>, Boolean) -> Unit
+    onBatchSetEnabled: (List<SkillUiEntry>, Boolean) -> Unit,
+    /** 打开技能商店（搜索并安装第三方技能）。 */
+    onOpenStore: () -> Unit = {}
 ) {
     // 只在数据变化时分组，避免每次重组都产生新 List。
     val (projectSkills, globalSkills, pluginSkills) = remember(entries) {
@@ -127,6 +130,9 @@ internal fun SkillsSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
+                TextButton(onClick = onOpenStore) {
+                    Text(stringResource(R.string.skill_store_entry))
+                }
             }
         }
         return
@@ -139,6 +145,16 @@ internal fun SkillsSection(
     val selectedEntries: List<SkillUiEntry> = selection.selectedKeys.mapNotNull { keyToEntry[it] }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // 商店入口常驻：列表为空时也能进（空态另有按钮）。
+        if (!selection.isActive) {
+            SettingsRow(
+                icon = FeatherIcons.ShoppingBag,
+                title = stringResource(R.string.skill_store_entry),
+                subtitle = stringResource(R.string.skill_store_entry_desc),
+                onClick = onOpenStore
+            )
+            SettingsDivider()
+        }
         if (selection.isActive) {
             val enabled = selection.selectedCount > 0
             SelectionActionBar(
