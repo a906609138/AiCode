@@ -48,6 +48,7 @@ import com.aicode.feature.settings.presentation.SkillUiEntry
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.Book
 import compose.icons.feathericons.ChevronRight
+import compose.icons.feathericons.ShoppingBag
 import compose.icons.feathericons.Trash2
 
 /**
