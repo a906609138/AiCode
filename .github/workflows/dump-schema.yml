@@ -1,0 +1,43 @@
+# 临时工作流：仅用于生成并导出 Room 导出的 schema JSON。
+# 场景：改了数据库 schema / SCHEMA_VERSION 但本地无法编译，需要拿到 KSP 生成的
+# app/schemas/.../<version>.json 提交进仓库（MigrationTest 依赖它）。
+# 用完请删除本文件。
+name: Dump Room Schema
+
+on:
+  workflow_dispatch:
+
+jobs:
+  dump:
+    name: Generate schema JSON
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      # 只跑到编译阶段即可产出 schema；跳过单测避免被无关失败卡住。
+      - name: Compile debug variant (generates schema)
+        run: ./gradlew :app:compileUniversalDebugKotlin --stacktrace
+
+      - name: Show generated schema files
+        run: ls -l app/schemas/com.aicode.feature.agent.data.local.database.AgentDatabase/ | tail -5
+
+      - name: Upload schema JSON
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-schemas
+          path: app/schemas
