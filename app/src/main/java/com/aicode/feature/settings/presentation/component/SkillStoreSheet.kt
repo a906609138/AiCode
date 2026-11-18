@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -35,7 +37,7 @@ import com.aicode.R
 import com.aicode.core.theme.Radius
 import com.aicode.core.theme.Spacing
 import com.aicode.core.ui.AdaptiveModalBottomSheet
-import com.aicode.feature.agent.data.remote.skillstore.SkillStoreItem
+import com.aicode.feature.agent.domain.skillstore.SkillStoreItem
 import com.aicode.feature.settings.presentation.SkillStoreViewModel
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.Download
@@ -84,13 +86,42 @@ internal fun SkillStoreSheet(
                 modifier = Modifier.padding(bottom = Spacing.md)
             )
 
+            SourceTabs(
+                sources = state.sources,
+                selectedSourceId = state.selectedSourceId,
+                onSelect = viewModel::selectSource
+            )
+
+            Spacer(Modifier.height(Spacing.sm))
+
             SearchRow(
                 query = state.query,
+                enabled = state.searchEnabled,
+                disabledHint = state.searchDisabledHint,
                 onQueryChange = viewModel::onQueryChange,
                 onSearch = viewModel::search
             )
 
-            Spacer(Modifier.height(Spacing.md))
+            SortTabs(
+                selected = state.sort,
+                onSelect = viewModel::selectSort
+            )
+
+            state.statuses.takeIf { it.isNotEmpty() }?.let { statuses ->
+                Text(
+                    text = statuses.joinToString(" · ") { status ->
+                        if (status.error == null) "${status.displayName} ${status.count}"
+                        else "${status.displayName} ${status.error}"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = Spacing.xs)
+                )
+            }
+
+            Spacer(Modifier.height(Spacing.sm))
 
             state.message?.let { message ->
                 Text(
@@ -109,7 +140,7 @@ internal fun SkillStoreSheet(
                     onInstall = viewModel::install,
                     onBack = viewModel::closeDetail
                 )
-                state.items.isEmpty() -> EmptyBox(initial = state.initial)
+                state.items.isEmpty() -> EmptyBox(initial = state.initial, message = state.message)
                 else -> LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -126,21 +157,80 @@ internal fun SkillStoreSheet(
 }
 
 @Composable
-private fun SearchRow(query: String, onQueryChange: (String) -> Unit, onSearch: () -> Unit) {
+private fun SearchRow(
+    query: String,
+    enabled: Boolean,
+    disabledHint: String?,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         OutlinedTextField(
             value = query,
             onValueChange = onQueryChange,
             singleLine = true,
-            placeholder = { Text(stringResource(R.string.skill_store_search_hint)) },
+            enabled = enabled,
+            placeholder = {
+                Text(disabledHint ?: stringResource(R.string.skill_store_search_hint))
+            },
             leadingIcon = {
                 Icon(FeatherIcons.Search, contentDescription = null, modifier = Modifier.size(18.dp))
             },
             modifier = Modifier.weight(1f)
         )
         Spacer(Modifier.size(Spacing.sm))
-        TextButton(onClick = onSearch) {
+        TextButton(onClick = onSearch, enabled = enabled) {
             Text(stringResource(R.string.common_search))
+        }
+    }
+}
+
+/** 顶部源标签：「全部」+ 各源。 */
+@Composable
+private fun SourceTabs(
+    sources: List<com.aicode.feature.agent.domain.skillstore.SkillStoreSource>,
+    selectedSourceId: String?,
+    onSelect: (String?) -> Unit
+) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        item {
+            FilterChip(
+                selected = selectedSourceId == null,
+                onClick = { onSelect(null) },
+                label = { Text("全部") }
+            )
+        }
+        items(sources, key = { it.id }) { source ->
+            FilterChip(
+                selected = selectedSourceId == source.id,
+                onClick = { onSelect(source.id) },
+                label = { Text(source.displayName) }
+            )
+        }
+    }
+}
+
+/** 排序标签：推荐 / 下载量 / 最新。 */
+@Composable
+private fun SortTabs(
+    selected: com.aicode.feature.agent.domain.skillstore.SkillStoreSort,
+    onSelect: (com.aicode.feature.agent.domain.skillstore.SkillStoreSort) -> Unit
+) {
+    val labels = listOf(
+        com.aicode.feature.agent.domain.skillstore.SkillStoreSort.RECOMMENDED to "推荐",
+        com.aicode.feature.agent.domain.skillstore.SkillStoreSort.DOWNLOADS to "下载量",
+        com.aicode.feature.agent.domain.skillstore.SkillStoreSort.UPDATED to "最新"
+    )
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+        modifier = Modifier.padding(top = Spacing.sm)
+    ) {
+        labels.forEach { (sort, label) ->
+            FilterChip(
+                selected = selected == sort,
+                onClick = { onSelect(sort) },
+                label = { Text(label) }
+            )
         }
     }
 }
@@ -196,7 +286,7 @@ private fun SkillRow(item: SkillStoreItem, onClick: () -> Unit) {
 /** 详情：展示完整描述、发布方、安全审核结论与安装按钮。 */
 @Composable
 private fun SkillDetailPane(
-    detail: com.aicode.feature.agent.data.remote.skillstore.SkillStoreDetail,
+    detail: com.aicode.feature.agent.domain.skillstore.SkillStoreDetail,
     installing: Boolean,
     onInstall: () -> Unit,
     onBack: () -> Unit
@@ -276,13 +366,13 @@ private fun LoadingBox() {
 }
 
 @Composable
-private fun EmptyBox(initial: Boolean) {
+private fun EmptyBox(initial: Boolean, message: String? = null) {
     Box(
         modifier = Modifier.fillMaxWidth().height(160.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = stringResource(
+            text = message ?: stringResource(
                 if (initial) R.string.skill_store_initial_hint else R.string.skill_store_empty
             ),
             style = MaterialTheme.typography.bodySmall,

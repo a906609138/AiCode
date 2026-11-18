@@ -101,4 +101,51 @@ class SkillStoreInstaller @Inject constructor(
         MessageDigest.getInstance("SHA-256")
             .digest(text.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
+
+    /**
+     * 从已获取的正文安装：供多源商店用。
+     *
+     * 各源的文件清单、哈希、下载方式各不相同，由各自的 [SkillStoreSource] 消化后交给这里，
+     * 落盘阶段统一只做体积限制与路径穿越防御。源不给哈希时不做校验。
+     *
+     * @param sha256ByPath 路径到预期 sha256；为空表示该源不提供哈希
+     */
+    suspend fun installFromContents(
+        slug: String,
+        contents: Map<String, String>,
+        sha256ByPath: Map<String, String> = emptyMap()
+    ): SkillStoreResult<SkillInstallResult> {
+        if (contents.isEmpty()) return SkillStoreResult.Failure("技能没有可安装的文件")
+        if (contents.values.sumOf { it.toByteArray(Charsets.UTF_8).size } > MAX_TOTAL_BYTES) {
+            return SkillStoreResult.Failure("技能体积超出上限，已取消安装")
+        }
+        for ((path, content) in contents) {
+            if (content.toByteArray(Charsets.UTF_8).size > MAX_FILE_BYTES) {
+                return SkillStoreResult.Failure("文件过大，已取消安装：$path")
+            }
+            val expected = sha256ByPath[path]
+            if (!expected.isNullOrBlank() && sha256(content) != expected) {
+                FileLogger.w(TAG, "文件校验不一致: $path")
+                return SkillStoreResult.Failure("文件校验失败，已取消安装：$path")
+            }
+        }
+
+        val root = "${globalSkillSource.skillsRoot.trimEnd('/')}/$slug"
+        var written = 0
+        return try {
+            for ((path, content) in contents) {
+                val rel = path.trim().removePrefix("/")
+                if (rel.isEmpty() || rel.contains("..")) {
+                    return SkillStoreResult.Failure("文件路径非法，已取消安装：$path")
+                }
+                fileAccess.writeFile("$root/$rel", content, overwrite = true)
+                written++
+            }
+            fileAccess.invalidateAgentConfigCache(globalSkillSource.skillsRoot)
+            SkillStoreResult.Success(SkillInstallResult(slug, written))
+        } catch (e: Exception) {
+            FileLogger.e(TAG, "写入技能文件失败: $slug", e)
+            SkillStoreResult.Failure("写入技能文件失败：${e.message}")
+        }
+    }
 }
