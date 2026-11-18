@@ -756,6 +756,31 @@ internal fun ReasoningBubble(
     }
     // 展开渲染用节流文本（流式思考时降低 md 解析频率）；preRendered 时外部已按打字机节奏给出渲染文本。
     val renderText = if (preRendered) text else rememberThrottledStreamingText(text)
+
+    /**
+     * 流式思考跟随底部。
+     *
+     * 展开后正文是独立的 LazyColumn（见下方 MarkdownContent 的 lazyScroll），默认停在顶部；
+     * 不跟随的话，思考在生成时新内容全在视口下方，用户看不到。
+     *
+     * 两个约束：
+     * - 只在 [live] 时跟随：已完成的思考展开后应当从头读，不该被拽到末尾；
+     * - 用户上翻即停：若当前位置已经离开底部，说明他在往回看，不再抢滚动。
+     *
+     * 用 scrollToItem 而不 animateScrollToItem：流式逐字追加快，动画会排队堆积反而卡。
+     * 每次只多一两行时直接跳在视觉上本就是连续下滑的效果。
+     */
+    LaunchedEffect(live, expanded, renderText.length) {
+        if (!live || !expanded) return@LaunchedEffect
+        val info = scrollState.layoutInfo
+        val lastIndex = info.totalItemsCount - 1
+        if (lastIndex <= 0) return@LaunchedEffect
+        val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: return@LaunchedEffect
+        // 留一格容差：最后一项通常尚未完全露出，严格相等会永远判为「不在底部」。
+        if (lastVisible >= lastIndex - 1) {
+            scrollState.scrollToItem(lastIndex)
+        }
+    }
     val effectiveDurationMs = durationMs?.takeIf { it > 0 } ?: elapsedMillis.takeIf { it > 0 }
     val formattedDuration = remember(effectiveDurationMs, live) {
         effectiveDurationMs?.let { ms ->
