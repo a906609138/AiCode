@@ -669,7 +669,7 @@ internal fun reasoningPreviewLine(raw: String, live: Boolean): String {
 private val REASONING_PREVIEW_MARKERS = charArrayOf(' ', '\t', '#', '*', '-', '>', '`', '+')
 
 /** 思考展开窗口的最大高度：超出后在窗口内滚动，不再无限撑高、拖走整页滚动。 */
-private val ReasoningWindowMaxHeight = 300.dp
+private val ReasoningWindowMaxHeight = 250.dp
 
 /**
  * 思考窗口内层懒列表的预组合窗口。
@@ -727,7 +727,11 @@ internal fun ReasoningBubble(
     streamingCacheKey: String? = null,
 ) {
     var localExpanded by remember { mutableStateOf(defaultExpanded) }
-    val expanded = expandedOverride ?: localExpanded
+    // 生成中强制展开（live → true，不管用户手动记录）：思考内容要实时看得到；
+    // 完成后 live 变 false，自动回落到用户记录/默认值，于是折叠起来。
+    // live 是本轮生成的派生状态，不读写用户偏好，所以生成中的点按会被下一帧盖回——
+    // 这是刻意取舍：生成阶段以「看得到实时思考」优先。
+    val expanded = if (live) true else (expandedOverride ?: localExpanded)
     val toggleExpanded: (Boolean) -> Unit = { next ->
         if (onExpandedChange != null) onExpandedChange(next) else localExpanded = next
     }
@@ -756,6 +760,22 @@ internal fun ReasoningBubble(
     }
     // 展开渲染用节流文本（流式思考时降低 md 解析频率）；preRendered 时外部已按打字机节奏给出渲染文本。
     val renderText = if (preRendered) text else rememberThrottledStreamingText(text)
+
+    /**
+     * 生成中窗口内贴底跟随。
+     *
+     * [live] 时内容始终贴到最底部（新思考从下方长出、旧内容向上滚出），不判断用户是否上翻：
+     * 窗口只有 [ReasoningWindowMaxHeight] 高，生成中看的就是最新进展；要往前翻等生成完再看。
+     * 不跟随的话，展开态默认停在顶部，新内容全在视口下方，等于看不到。
+     *
+     * 用 scrollToItem 而非 animateScrollToItem：流式逐字追加快，动画会排队堆积反而卡；
+     * 每次只多一两行时直接跳在视觉上本就是连续下滑。
+     */
+    LaunchedEffect(live, expanded, renderText.length) {
+        if (!live || !expanded) return@LaunchedEffect
+        val lastIndex = scrollState.layoutInfo.totalItemsCount - 1
+        if (lastIndex > 0) scrollState.scrollToItem(lastIndex)
+    }
     val effectiveDurationMs = durationMs?.takeIf { it > 0 } ?: elapsedMillis.takeIf { it > 0 }
     val formattedDuration = remember(effectiveDurationMs, live) {
         effectiveDurationMs?.let { ms ->
