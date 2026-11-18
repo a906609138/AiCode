@@ -282,10 +282,12 @@ class SystemPromptProvider @Inject constructor(
     }
 
     fun build(agentContext: AgentContext): String {
-        val body = withExpertBlock(agentContext, buildBase(agentContext))
-        // 破甲以最高优先级前置：先于专家人设块与静态基线。放在最外层而不是 buildBase 内部，
-        // 是因为专家块会包住 buildBase 的结果，塞在里面会被专家人设挤到第二层。
-        return breakjailPromptProvider.buildNow()?.let { "$it\n\n$body" } ?: body
+        val withExpert = withExpertBlock(agentContext, buildBase(agentContext))
+        // 子代理不注入破甲（与 AiMini 一致：它只在主路径与 custom 路径两处接破甲）。
+        // 主路径的破甲在专家块叠加之后才前置，最终顺序为「破甲 → （基线 + 专家块）」；
+        // 若在 buildBase 内前置，顺序会变成「基线 → 专家块 → 破甲」，破甲反而落到末尾。
+        if (agentContext.agentDefinition != null) return withExpert
+        return appendBreakjail(withExpert)
     }
 
     /**
@@ -366,7 +368,7 @@ class SystemPromptProvider @Inject constructor(
         }
         val memories = memoryListSource.build(ctx)
         val projectRules = projectRuleSource.build(ctx)
-        return renderVariables(
+        val rendered = renderVariables(
             content,
             activeSkillsSource.build(ctx),
             memories.global,
@@ -379,7 +381,18 @@ class SystemPromptProvider @Inject constructor(
             currentDate(),
             goal = renderGoalBlock(ctx)
         )
+        // 破甲由 build() 统一前置（custom-only 路径同样经那里），这里只返回渲染结果。
+        return rendered
     }
+
+    /**
+     * 把破甲正文前置到提示词最前；未开启或文件不可用时原样返回。
+     *
+     * 只用于主代理路径（[build] 在专家块叠加之后调用），子代理不注入——
+     * 与 AiMini 一致：它只在主路径与 custom 路径两处接破甲，子代理路径没有。
+     */
+    private fun appendBreakjail(prompt: String): String =
+        breakjailPromptProvider.buildNow()?.let { "$it\n\n$prompt" } ?: prompt
 
     /**
      * 按子代理定义组装提示词：只注入 [AgentDefinition.inject] 列出的片段，再接 agent 自己的提示词。
