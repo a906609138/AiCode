@@ -1374,16 +1374,29 @@ fun SettingsScreen(
                     val expertViewModel: com.aicode.feature.settings.presentation.ExpertManagerViewModel =
                         androidx.hilt.navigation.compose.hiltViewModel()
                     val expertState by expertViewModel.state.collectAsStateWithLifecycle()
-                    ExpertManagerSection(
-                        state = expertState,
-                        onQueryChange = expertViewModel::onQueryChange,
-                        onSelectCategory = expertViewModel::selectCategory,
-                        onCreate = { /* 编辑页待第二批接入 */ },
-                        onEdit = { /* 编辑页待第二批接入 */ },
-                        onTogglePinned = expertViewModel::togglePinned,
-                        onToggleDisabled = expertViewModel::toggleDisabled,
-                        onDelete = expertViewModel::delete
-                    )
+                    val expertEditor = expertState.editor
+                    if (expertEditor == null) {
+                        ExpertManagerSection(
+                            state = expertState,
+                            onQueryChange = expertViewModel::onQueryChange,
+                            onSelectCategory = expertViewModel::selectCategory,
+                            onCreate = expertViewModel::openCreate,
+                            onEdit = expertViewModel::openEdit,
+                            onTogglePinned = expertViewModel::togglePinned,
+                            onToggleDisabled = expertViewModel::toggleDisabled,
+                            onDelete = expertViewModel::delete
+                        )
+                    } else {
+                        ExpertEditorSection(
+                            editor = expertEditor,
+                            onBack = expertViewModel::closeEditor,
+                            onUpdate = expertViewModel::updateEditor,
+                            onProviderChange = expertViewModel::setEditorProvider,
+                            onToggleTool = expertViewModel::toggleEditorTool,
+                            onToggleSkill = expertViewModel::toggleEditorSkill,
+                            onSave = expertViewModel::saveEditor
+                        )
+                    }
                 }
                 SettingsSection.Container -> ContainerSection(
                     profiles = containerProfiles,
