@@ -133,6 +133,28 @@ class ContainerInstaller @Inject constructor(
         }
 
         /**
+         * 从 assets 提取内置技能到 ~/.aicode/skills/。
+         *
+         * 技能是「目录 + SKILL.md」结构，故走递归复制；每个技能目录若已存在则整体跳过，
+         * 保留用户对内置技能的修改；用户删掉的技能也不会被升级拉回。
+         */
+        fun extractSkills(context: Context) {
+            val destRoot = File(File(context.filesDir, "aicode"), "skills")
+            destRoot.mkdirs()
+            runCatching {
+                val entries = context.assets.list("skills") ?: return@runCatching
+                for (entry in entries) {
+                    val destDir = File(destRoot, entry)
+                    if (!destDir.exists()) {
+                        extractAssetsRecursive(context, "skills/$entry", destDir)
+                    }
+                }
+            }.onFailure {
+                FileLogger.w(TAG, "提取内置技能失败: ${it.message}", it)
+            }
+        }
+
+        /**
          * 从 assets 提取内置脚本（如面板 demo_balance.py）到 ~/.aicode/scripts/。
          * 若文件已存在则不覆盖，以保留用户的修改。
          */

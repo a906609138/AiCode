@@ -308,6 +308,10 @@ class AIEditorApp : Application(), Configuration.Provider {
         appScope.launch {
             ContainerInstaller.extractExperts(this@AIEditorApp)
         }
+        // 启动即释放内置技能到 ~/.aicode/skills/（目录结构，已存在则跳过整目录）。
+        appScope.launch {
+            ContainerInstaller.extractSkills(this@AIEditorApp)
+        }
         // 启动即把旧 Room git 凭据一次性迁移到 git-credentials 文件（真源已迁到文件，删表由迁移器完成）。
         appScope.launch {
             legacyCredentialMigrator.migrateIfNeeded()
