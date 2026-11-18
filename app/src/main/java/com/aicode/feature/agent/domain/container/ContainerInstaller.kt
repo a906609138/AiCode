@@ -35,6 +35,9 @@ class ContainerInstaller @Inject constructor(
         private const val TAG = "ContainerInstaller"
         @Volatile private var docsExtractedSession = false
 
+        /** 已改名的内置专家文件：旧名 → 现名。用于升级后清理设备上的遗留副本。 */
+        private val LEGACY_EXPERT_FILES = listOf("aimini-android-dev.md")
+
         /**
          * 从 assets 提取文档到 ~/.aicode/docs (内置使用指导)，支持 guide/ advanced/ 等分类子目录。
          *
@@ -136,6 +139,14 @@ class ContainerInstaller @Inject constructor(
         fun extractExperts(context: Context) {
             val destDir = File(File(context.filesDir, "aicode"), "experts")
             destDir.mkdirs()
+            // 已改名的旧内置定义：只在文件内容确为旧内置版时删除，用户自己写的同名文件不动。
+            // 不清理的话，升级后 experts/ 里会同时存在新旧两份，专家列表里出现两个重名项。
+            LEGACY_EXPERT_FILES.forEach { legacy ->
+                val stale = File(destDir, legacy)
+                if (stale.isFile && runCatching { stale.readText() }.getOrNull()?.contains("displayName: 安卓开发专家（AiMini）") == true) {
+                    if (stale.delete()) FileLogger.i(TAG, "已清理改名的旧内置专家: $legacy")
+                }
+            }
             runCatching {
                 val entries = context.assets.list("experts") ?: return@runCatching
                 for (entry in entries) {
