@@ -68,6 +68,7 @@ import com.aicode.core.theme.AppThemePreset
 import com.aicode.core.theme.Spacing
 import com.aicode.core.theme.isDynamicColorSupported
 import com.aicode.core.theme.semanticColors
+import com.aicode.core.ui.AppSwitch
 import com.aicode.core.ui.ListSelectionState
 import com.aicode.core.ui.SelectionToggleAction
 import com.aicode.core.ui.pageEnter
@@ -1297,7 +1298,6 @@ fun SettingsScreen(
                         onDeleteFragment = promptsViewModel::deleteFragment,
                         onReorder = promptsViewModel::reorderFragments,
                         onToggleBuiltinDisabled = promptsViewModel::setBuiltinDisabled,
-                        onToggleBreakjail = promptsViewModel::setBreakjailEnabled,
                         onBatchDeleteFragments = promptsViewModel::deleteFragments
                     )
                     if (showResetPrompts) {
@@ -2199,6 +2199,10 @@ internal fun SettingsMenu(
                 title = stringResource(SettingsSection.Prompts.titleRes),
                 onClick = { onOpen(SettingsSection.Prompts) }
             )
+            SettingsDivider()
+            // 破甲：与 AiMini 一致放在设置主界面「提示词」下方，不必进二级页面才能开关。
+            // 状态文案取 provider.describe()（未开启 / 已开启 N 字节 / 文件不存在），一眼能看出为何没生效。
+            BreakjailRow()
             PluginSettingsRows(pluginPages, PluginUiSlots.SETTINGS_AI, pluginLanguageTag, onOpenPluginPage)
         }
 
@@ -2386,4 +2390,32 @@ private fun SkillImportError.messageRes(): Int = when (this) {
     SkillImportError.INVALID_ARCHIVE -> R.string.skills_import_error_invalid_archive
     SkillImportError.UNSUPPORTED_FILE -> R.string.skills_import_error_unsupported_file
     SkillImportError.IO_FAILED -> R.string.skills_import_error_io
+}
+
+/**
+ * 破甲开关行：放在设置主界面「提示词」下方，进 App 就能开关，不必点进二级页。
+ *
+ * 自带 ViewModel 与刷新（与提示词页共用同一个 [com.aicode.feature.settings.presentation.PromptsViewModel]，
+ * 数据源一致，不会出现两处开关状态不同步）。副标题显示 [PromptsUiState.breakjailStatus]，
+ * 「开了但文件不存在」这类问题不必翻日志。
+ */
+@Composable
+private fun BreakjailRow() {
+    val promptsViewModel: com.aicode.feature.settings.presentation.PromptsViewModel =
+        androidx.hilt.navigation.compose.hiltViewModel()
+    val promptsState by promptsViewModel.state.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { promptsViewModel.refresh() }
+    SettingsRow(
+        icon = FeatherIcons.Zap,
+        title = stringResource(R.string.prompts_breakjail),
+        subtitle = promptsState.breakjailStatus.ifBlank {
+            stringResource(R.string.prompts_breakjail_hint)
+        },
+        trailing = {
+            AppSwitch(
+                checked = promptsState.breakjailEnabled,
+                onCheckedChange = promptsViewModel::setBreakjailEnabled
+            )
+        }
+    )
 }

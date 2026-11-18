@@ -86,7 +86,6 @@ internal fun PromptsSection(
     onDeleteFragment: (Int) -> Unit,
     onReorder: (List<PromptFragment>) -> Unit,
     onToggleBuiltinDisabled: (Boolean) -> Unit,
-    onToggleBreakjail: (Boolean) -> Unit,
     onBatchDeleteFragments: (List<Int>) -> Unit
 ) {
     var showBatchDeleteConfirm by remember { mutableStateOf(false) }
@@ -115,18 +114,6 @@ internal fun PromptsSection(
                 subtitle = stringResource(R.string.prompts_disable_builtin_hint),
                 trailing = {
                     AppSwitch(checked = state.builtinDisabled, onCheckedChange = onToggleBuiltinDisabled)
-                }
-            )
-            SettingsRow(
-                icon = null,
-                title = stringResource(R.string.prompts_breakjail),
-                subtitle = if (state.breakjailStatus.isBlank()) {
-                    stringResource(R.string.prompts_breakjail_hint)
-                } else {
-                    state.breakjailStatus
-                },
-                trailing = {
-                    AppSwitch(checked = state.breakjailEnabled, onCheckedChange = onToggleBreakjail)
                 }
             )
         }
