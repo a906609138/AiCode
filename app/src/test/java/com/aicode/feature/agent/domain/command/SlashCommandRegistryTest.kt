@@ -54,9 +54,18 @@ class SlashCommandRegistryTest {
     private fun registry(vararg handlers: ActionCommandHandler) =
         SlashCommandRegistry(handlers.toSet(), skillRepository, context)
 
+    /**
+     * 设定技能清单并刷新到稳定状态。
+     *
+     * 构造时会立即在后台刷一次（见 SlashCommandRegistry.init），那次刷新可能晚于这里的
+     * 显式 refresh 完成；先等它结束，断言才不会偶发读到旧快照。
+     */
     private fun prepare(registry: SlashCommandRegistry, skills: List<Skill>) {
         skillsForTest = skills
-        runBlocking { registry.refresh() }
+        runBlocking {
+            registry.awaitInitialRefresh()
+            registry.refresh()
+        }
     }
 
     // ---- 菜单合并 ----

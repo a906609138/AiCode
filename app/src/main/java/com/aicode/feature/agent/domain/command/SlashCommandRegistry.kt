@@ -19,8 +19,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * 斜杠命令注册表：聚合内置命令（[ActionCommandHandler]）与已启用技能，
@@ -66,6 +69,23 @@ class SlashCommandRegistry @Inject constructor(
      */
     private val refreshGeneration = AtomicLong(0)
 
+    /** 串行化并发刷新：避免两次刷新的「读技能 → 写快照」交错。 */
+    private val refreshMutex = Mutex()
+
+    /**
+     * 构造时那次后台刷新的句柄。
+     *
+     * 生产代码不需要等它；单测需要——否则构造期的刷新可能晚于测试里显式调用的 [refresh] 完成，
+     * 让断言读到旧快照（历史上有过 `SlashCommandRegistryTest` 偶发失败）。
+     */
+    @Volatile
+    private var initialRefreshJob: Job? = null
+
+    /** 等待构造期那次后台刷新结束（供测试与需要确定性的调用方使用）。 */
+    suspend fun awaitInitialRefresh() {
+        initialRefreshJob?.join()
+    }
+
     private val refreshScope = CoroutineScope(
         SupervisorJob() + Dispatchers.IO +
             CoroutineExceptionHandler { _, e ->
@@ -74,7 +94,7 @@ class SlashCommandRegistry @Inject constructor(
     )
 
     init {
-        refreshScope.launch { refresh() }
+        initialRefreshJob = refreshScope.launch { refresh() }
         pluginManager?.let { pm ->
             refreshScope.launch {
                 pm.plugins.collect { refresh() }
@@ -83,25 +103,27 @@ class SlashCommandRegistry @Inject constructor(
     }
 
     /** 重新扫描技能并重建菜单。涉及文件 IO，调用方应在 IO 上下文调用。 */
-    suspend fun refresh(force: Boolean = false) = runInterruptible(Dispatchers.IO) {
-        // 进入即占号：本代之后若又发起了刷新，本次结果即为过期，直接丢弃（见 refreshGeneration）。
-        val generation = refreshGeneration.incrementAndGet()
-        if (force) skillRepository.refreshDirectoryCache()
-        val latestSkills = try {
-            skillRepository.listSkills()
-        } catch (error: IOException) {
-            if (error is InterruptedIOException) throw error
-            if (error is RemoteAgentConfigIdentityChangedException) {
-                FileLogger.d(TAG, "斜杠命令技能清单等待连接就绪")
-            } else {
-                FileLogger.w(TAG, "斜杠命令技能清单暂不可用", error)
+    suspend fun refresh(force: Boolean = false) = refreshMutex.withLock {
+        runInterruptible(Dispatchers.IO) {
+            // 进入即占号：本代之后若又发起了刷新，本次结果即为过期，直接丢弃（见 refreshGeneration）。
+            val generation = refreshGeneration.incrementAndGet()
+            if (force) skillRepository.refreshDirectoryCache()
+            val latestSkills = try {
+                skillRepository.listSkills()
+            } catch (error: IOException) {
+                if (error is InterruptedIOException) throw error
+                if (error is RemoteAgentConfigIdentityChangedException) {
+                    FileLogger.d(TAG, "斜杠命令技能清单等待连接就绪")
+                } else {
+                    FileLogger.w(TAG, "斜杠命令技能清单暂不可用", error)
+                }
+                emptyList()
             }
-            emptyList()
+            // 过期结果不入库：避免先发起的刷新后完成，把旧快照覆盖到更新的快照上。
+            if (refreshGeneration.get() != generation) return@runInterruptible
+            skills = latestSkills
+            _commands.value = buildCommands()
         }
-        // 过期结果不入库：避免先发起的刷新后完成，把旧快照覆盖到更新的快照上。
-        if (refreshGeneration.get() != generation) return@runInterruptible
-        skills = latestSkills
-        _commands.value = buildCommands()
     }
 
     private fun buildCommands(): List<SlashCommand> = buildList {
