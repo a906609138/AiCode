@@ -1422,6 +1422,7 @@
 
     <!-- Subagent Settings -->
     <string name="settings_subagents">Subagents</string>
+    <string name="experts_title">Experts</string>
     <string name="subagents_empty">No custom subagents yet</string>
     <string name="subagents_empty_hint">Tap + in the top bar to create one, or drop an agent\'s .md definition into ~/.aicode/agents/</string>
     <string name="subagents_no_project">No subagents in this project</string>

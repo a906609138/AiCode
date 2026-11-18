@@ -150,6 +150,7 @@ import compose.icons.feathericons.Sliders
 import compose.icons.feathericons.Terminal
 import compose.icons.feathericons.Trash2
 import compose.icons.feathericons.Users
+import compose.icons.feathericons.Star
 import compose.icons.feathericons.Zap
 import com.aicode.feature.onboarding.domain.OnboardingStep
 import com.aicode.feature.onboarding.presentation.onboardingTarget
@@ -191,6 +192,7 @@ internal enum class SettingsSection(@param:StringRes val titleRes: Int) {
     SubAgents(R.string.settings_subagents),
     SubAgentDetail(R.string.settings_subagents),
     SubAgentEditor(R.string.settings_subagents),
+    Experts(R.string.experts_title),
     Plugins(R.string.settings_plugins),
     PluginDetail(R.string.settings_plugins),
     PluginStoreDetail(R.string.settings_plugins),
@@ -1368,6 +1370,21 @@ fun SettingsScreen(
                         }
                     )
                 }
+                SettingsSection.Experts -> {
+                    val expertViewModel: com.aicode.feature.settings.presentation.ExpertManagerViewModel =
+                        androidx.hilt.navigation.compose.hiltViewModel()
+                    val expertState by expertViewModel.state.collectAsStateWithLifecycle()
+                    ExpertManagerSection(
+                        state = expertState,
+                        onQueryChange = expertViewModel::onQueryChange,
+                        onSelectCategory = expertViewModel::selectCategory,
+                        onCreate = { /* 编辑页待第二批接入 */ },
+                        onEdit = { /* 编辑页待第二批接入 */ },
+                        onTogglePinned = expertViewModel::togglePinned,
+                        onToggleDisabled = expertViewModel::toggleDisabled,
+                        onDelete = expertViewModel::delete
+                    )
+                }
                 SettingsSection.Container -> ContainerSection(
                     profiles = containerProfiles,
                     activeProfileId = activeProfileId,
@@ -2150,6 +2167,12 @@ internal fun SettingsMenu(
                 icon = FeatherIcons.Users,
                 title = stringResource(SettingsSection.SubAgents.titleRes),
                 onClick = { onOpen(SettingsSection.SubAgents) }
+            )
+            SettingsDivider()
+            SettingsRow(
+                icon = FeatherIcons.Star,
+                title = stringResource(SettingsSection.Experts.titleRes),
+                onClick = { onOpen(SettingsSection.Experts) }
             )
             SettingsDivider()
             SettingsRow(

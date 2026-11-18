@@ -1422,6 +1422,7 @@
 
     <!-- Subagent Settings -->
     <string name="settings_subagents">子代理</string>
+    <string name="experts_title">专家</string>
     <string name="subagents_empty">还没有自定义子代理</string>
     <string name="subagents_empty_hint">点右上角「+」新建一个，或把 agent 的 .md 定义放进 ~/.aicode/agents/</string>
     <string name="subagents_no_project">当前项目暂无子代理</string>
