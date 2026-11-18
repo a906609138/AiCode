@@ -2,11 +2,9 @@ package com.aicode.feature.settings.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.aicode.feature.agent.domain.prompt.BreakjailPromptProvider
 import com.aicode.feature.agent.domain.prompt.PromptFragment
 import com.aicode.feature.agent.domain.prompt.PromptFragmentCatalog
 import com.aicode.feature.agent.domain.prompt.PromptFragmentSource
-import com.aicode.feature.settings.data.repository.BreakjailSettingsRepository
 import com.aicode.feature.workspace.data.repository.WorkspaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -23,10 +21,6 @@ import javax.inject.Inject
 data class PromptsUiState(
     val fragments: List<PromptFragment> = emptyList(),
     val builtinDisabled: Boolean = false,
-    /** 破甲（置顶提示词）开关：正文取自 `~/.aicode/pj.md`，不参与片段编号体系。 */
-    val breakjailEnabled: Boolean = false,
-    /** 破甲就绪情况（未开启 / 文件不存在 / 已开启 N 字节），直接展示给用户排查。 */
-    val breakjailStatus: String = "",
     /** 没有选中工作区时项目层不可写，编辑/新建回落到全局层。 */
     val hasWorkspace: Boolean = false,
     val loading: Boolean = true
@@ -40,9 +34,7 @@ data class PromptsUiState(
 @HiltViewModel
 class PromptsViewModel @Inject constructor(
     private val catalog: PromptFragmentCatalog,
-    private val workspaceRepository: WorkspaceRepository,
-    private val breakjailSettingsRepository: BreakjailSettingsRepository,
-    private val breakjailPromptProvider: BreakjailPromptProvider
+    private val workspaceRepository: WorkspaceRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(PromptsUiState())
@@ -59,8 +51,6 @@ class PromptsViewModel @Inject constructor(
                 PromptsUiState(
                     fragments = catalog.list(projectRoot),
                     builtinDisabled = catalog.isBuiltinDisabled(),
-                    breakjailEnabled = breakjailSettingsRepository.enabledFlow.first(),
-                    breakjailStatus = breakjailPromptProvider.describe(),
                     hasWorkspace = projectRoot.isNotBlank(),
                     loading = false
                 )
@@ -145,16 +135,4 @@ class PromptsViewModel @Inject constructor(
         }
     }
 
-    /** 破甲开关：仅落盘；AIEditorApp 侧 collect 该 Flow 更新 SystemPromptProvider 读的缓存。 */
-    fun setBreakjailEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            breakjailSettingsRepository.setEnabled(enabled)
-            // 缓存同步写一次，避免依赖 app 层 collector 的调度时机：设置页里右一关，
-            // 下一轮请求就该不再注入。
-            breakjailPromptProvider.setEnabled(enabled)
-            _state.update {
-                it.copy(breakjailEnabled = enabled, breakjailStatus = breakjailPromptProvider.describe())
-            }
-        }
-    }
 }

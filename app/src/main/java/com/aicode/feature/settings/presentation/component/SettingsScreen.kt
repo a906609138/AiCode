@@ -158,6 +158,12 @@ import com.aicode.feature.onboarding.presentation.onboardingTarget
 import com.aicode.feature.settings.data.local.ProviderPreset
 import com.aicode.feature.terminal.data.repository.TerminalSettings
 import com.aicode.feature.terminal.presentation.component.TerminalSettingsSheet
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 /** 使用手册在线文档站地址。 */
 private const val USER_GUIDE_DOCS_URL = "https://aicode.murk.top"
@@ -2395,27 +2401,40 @@ private fun SkillImportError.messageRes(): Int = when (this) {
 /**
  * 破甲开关行：放在设置主界面「提示词」下方，进 App 就能开关，不必点进二级页。
  *
- * 自带 ViewModel 与刷新（与提示词页共用同一个 [com.aicode.feature.settings.presentation.PromptsViewModel]，
- * 数据源一致，不会出现两处开关状态不同步）。副标题显示 [PromptsUiState.breakjailStatus]，
- * 「开了但文件不存在」这类问题不必翻日志。
+ * 只读开关本身，不碰提示词片段。
+ *
+ * 之前这里复用了 [com.aicode.feature.settings.presentation.PromptsViewModel]，导致一进设置
+ * 主界面就扫全部提示词片段（内置 21 个 + 自定义，逐个读盘）且刷两次（VM init + LaunchedEffect），
+ * 冷启动变慢。AiMini 的同一个开关只渲染 SettingsRow + Switch，不创建任何提示词相关对象。
+ *
+ * 现在直接读仓库的开关流：开销从「扫全部片段」降到「一次 DataStore 读取」，
+ * 副标题固定用静态提示文案（与 AiMini 一致，不显示字节数）。
  */
 @Composable
 private fun BreakjailRow() {
-    val promptsViewModel: com.aicode.feature.settings.presentation.PromptsViewModel =
-        androidx.hilt.navigation.compose.hiltViewModel()
-    val promptsState by promptsViewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { promptsViewModel.refresh() }
+    val context = LocalContext.current
+    val repository = remember(context) {
+        EntryPointAccessors.fromApplication(context, BreakjailEntryPoint::class.java)
+            .breakjailSettingsRepository()
+    }
+    val enabled by repository.enabledFlow.collectAsStateWithLifecycle(initialValue = false)
+    val scope = rememberCoroutineScope()
     SettingsRow(
         icon = FeatherIcons.Zap,
         title = stringResource(R.string.prompts_breakjail),
-        subtitle = promptsState.breakjailStatus.ifBlank {
-            stringResource(R.string.prompts_breakjail_hint)
-        },
+        subtitle = stringResource(R.string.prompts_breakjail_hint),
         trailing = {
             AppSwitch(
-                checked = promptsState.breakjailEnabled,
-                onCheckedChange = promptsViewModel::setBreakjailEnabled
+                checked = enabled,
+                onCheckedChange = { next -> scope.launch { repository.setEnabled(next) } }
             )
         }
     )
+}
+
+/** 供 [BreakjailRow] 从组合里取仓库：设置页不必为此单独建一个 ViewModel。 */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+private interface BreakjailEntryPoint {
+    fun breakjailSettingsRepository(): com.aicode.feature.settings.data.repository.BreakjailSettingsRepository
 }
