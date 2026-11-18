@@ -1371,6 +1371,8 @@
     <string name="prompts_help">Help</string>
     <string name="prompts_disable_builtin">Disable all built-in prompts</string>
     <string name="prompts_disable_builtin_hint">Keep only your own fragments; you must supply every rule yourself</string>
+    <string name="prompts_breakjail">Breakjail</string>
+    <string name="prompts_breakjail_hint">Prepends pj.md ahead of the expert block and static baseline with the highest priority</string>
 
     <!-- Skills Settings -->
     <string name="skills_empty">No skills installed</string>

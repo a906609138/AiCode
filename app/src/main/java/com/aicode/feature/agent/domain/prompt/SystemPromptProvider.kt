@@ -42,7 +42,8 @@ class SystemPromptProvider @Inject constructor(
     private val containerInstaller: ContainerInstaller,
     private val agentDefinitionRepository: AgentDefinitionRepository,
     private val executionModeHolder: ExecutionModeHolder,
-    private val remoteSshConnection: RemoteSshConnection
+    private val remoteSshConnection: RemoteSshConnection,
+    private val breakjailPromptProvider: BreakjailPromptProvider
 ) {
     // 抽象独立的 Source
     interface PromptSource {
@@ -280,7 +281,12 @@ class SystemPromptProvider @Inject constructor(
         PromptFragmentResolver.numberedFragments(customDir).toMap()
     }
 
-    fun build(agentContext: AgentContext): String = withExpertBlock(agentContext, buildBase(agentContext))
+    fun build(agentContext: AgentContext): String {
+        val body = withExpertBlock(agentContext, buildBase(agentContext))
+        // 破甲以最高优先级前置：先于专家人设块与静态基线。放在最外层而不是 buildBase 内部，
+        // 是因为专家块会包住 buildBase 的结果，塞在里面会被专家人设挤到第二层。
+        return breakjailPromptProvider.buildNow()?.let { "$it\n\n$body" } ?: body
+    }
 
     /**
      * 在主代理基线末尾追加专家人设块。

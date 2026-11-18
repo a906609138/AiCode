@@ -24,6 +24,7 @@ import com.aicode.feature.plugin.runtime.PluginToolManager
 import com.aicode.feature.settings.data.repository.KeepaliveSettingsRepository
 import com.aicode.feature.settings.data.repository.LanguageSettingsRepository
 import com.aicode.feature.settings.data.repository.LogSettingsRepository
+import com.aicode.feature.settings.data.repository.BreakjailSettingsRepository
 import com.aicode.feature.settings.data.remote.ModelMetadataService
 import com.aicode.feature.terminal.domain.KeepaliveWorker
 import com.aicode.feature.terminal.domain.TerminalKeepaliveService
@@ -172,6 +173,14 @@ class AIEditorApp : Application(), Configuration.Provider {
     @Inject
     lateinit var pluginToolManager: PluginToolManager
 
+    /** 破甲开关持久化：启动读首帧，并随设置页切换实时更新。 */
+    @Inject
+    lateinit var breakjailSettingsRepository: BreakjailSettingsRepository
+
+    /** 破甲正文提供器：SystemPromptProvider 同步读它的开关缓存。 */
+    @Inject
+    lateinit var breakjailPromptProvider: com.aicode.feature.agent.domain.prompt.BreakjailPromptProvider
+
     /** 插件启动 hook：派发 app.started，拉起声明该事件的插件进程。 */
     @Inject
     lateinit var pluginHookDispatcher: PluginHookDispatcher
@@ -311,6 +320,14 @@ class AIEditorApp : Application(), Configuration.Provider {
         // 启动即释放内置技能到 ~/.aicode/skills/（目录结构，已存在则跳过整目录）。
         appScope.launch {
             ContainerInstaller.extractSkills(this@AIEditorApp)
+        }
+        // 启动即释放破甲正文到 ~/.aicode/pj.md（已存在不覆盖，用户改过不会被升级拉回）。
+        appScope.launch {
+            ContainerInstaller.extractBreakjail(this@AIEditorApp)
+        }
+        // 启动即读首帧破甲开关，并随设置页改动实时生效；SystemPromptProvider 每轮同步读该缓存。
+        appScope.launch {
+            breakjailSettingsRepository.enabledFlow.collect { breakjailPromptProvider.setEnabled(it) }
         }
         // 启动即把旧 Room git 凭据一次性迁移到 git-credentials 文件（真源已迁到文件，删表由迁移器完成）。
         appScope.launch {

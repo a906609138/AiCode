@@ -1371,6 +1371,8 @@
     <string name="prompts_help">帮助</string>
     <string name="prompts_disable_builtin">完全禁用内置提示词</string>
     <string name="prompts_disable_builtin_hint">只保留你的片段；需要自己补全全部规则，谨慎开启</string>
+    <string name="prompts_breakjail">破甲</string>
+    <string name="prompts_breakjail_hint">以最高优先级把 pj.md 拼在系统提示词最前，先于专家块与静态基线</string>
 
     <!-- Skills Settings -->
     <string name="skills_empty">还没有安装技能</string>

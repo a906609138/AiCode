@@ -1295,6 +1295,7 @@ fun SettingsScreen(
                         onDeleteFragment = promptsViewModel::deleteFragment,
                         onReorder = promptsViewModel::reorderFragments,
                         onToggleBuiltinDisabled = promptsViewModel::setBuiltinDisabled,
+                        onToggleBreakjail = promptsViewModel::setBreakjailEnabled,
                         onBatchDeleteFragments = promptsViewModel::deleteFragments
                     )
                     if (showResetPrompts) {

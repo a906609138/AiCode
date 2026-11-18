@@ -70,6 +70,25 @@ class ContainerInstaller @Inject constructor(
             }
         }
 
+        /**
+         * 首次启动释放破甲正文到 ~/.aicode/pj.md。
+         *
+         * 与 extractPrompts 的全量覆盖不同：已存在则跳过。pj.md 是可以由用户编辑的最高优先级
+         * 规则正文，升级覆盖会把用户改动冲掉，所以只在缺文件时写入（删掉文件后重启可恢复内置版）。
+         */
+        fun extractBreakjail(context: Context) {
+            val dest = File(File(context.filesDir, "aicode"), "pj.md")
+            if (dest.isFile) return
+            runCatching {
+                context.assets.open("aicode/pj.md").use { input ->
+                    dest.parentFile?.mkdirs()
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
+            }.onFailure {
+                FileLogger.w(TAG, "提取内置破甲提示词失败: ${it.message}", it)
+            }
+        }
+
         /** 递归复制 assets 下的目录到目标目录，支持子目录（如 prompts/agent/、docs/guide/）。 */
         private fun extractAssetsRecursive(context: Context, assetDir: String, destDir: File) {
             val entries = context.assets.list(assetDir) ?: return
