@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -64,24 +66,26 @@ class McpManager @Inject constructor(
     private val _statuses = MutableStateFlow<List<McpServerStatus>>(emptyList())
     val statuses: StateFlow<List<McpServerStatus>> = _statuses.asStateFlow()
 
+    /** 启动首帧的唯一一次加载：配置 + 工作区就绪后的完整 reload。 */
+    private suspend fun initialLoad() {
+        reload()
+    }
+
     fun start() {
-        // 跟随当前工作区切换自动重载（首帧立即发射当前值，等价启动即重连；
-        // 项目切换时合并配置与 stdio 工具的项目路径都会变化，需要重建连接）。
+        // 三条触发源合并成一路，**丢弃首帧**：三个 Flow 启动时都会立即发射当前值，
+        // 若各自 collect 就会在启动瞬间跑三次 reload（日志实测三次）。
+        // 首次加载由下面单独的 initialLoad 负责，这里只管后续变化。
         scope.launch {
-            workspaceRepository.current.collectLatest {
+            initialLoad()
+        }
+        scope.launch {
+            merge(
+                workspaceRepository.current.drop(1).map { },
+                configRepository.externalChanges.map { },
+                pluginManager.plugins.drop(1).map { }
+            ).collect {
                 reload()
             }
-        }
-        // 配置文件被外部（容器内/手工）直接编辑：数秒内自动重载，使新增/删除/启停即时生效。
-        scope.launch {
-            configRepository.externalChanges.collect {
-                FileLogger.i(TAG, "检测到 MCP 配置文件外部变更，自动重载")
-                reload()
-            }
-        }
-        // 插件安装/启用/更新/卸载时，同步重连插件贡献的 MCP server。
-        scope.launch {
-            pluginManager.plugins.collect { reload() }
         }
         // 容器 profile 切换：stdio server 的进程跑在旧容器的 rootfs 上，必须重建才能用新容器；
         // HTTP server 不依赖容器，不受影响。drop(1) 跳过启动首帧（reload 已处理）。

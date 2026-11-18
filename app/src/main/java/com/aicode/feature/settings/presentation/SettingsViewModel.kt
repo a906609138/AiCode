@@ -770,6 +770,34 @@ class SettingsViewModel @Inject constructor(
     private val _imageVersions = MutableStateFlow<Map<String, String>>(emptyMap())
     val imageVersions: StateFlow<Map<String, String>> = _imageVersions.asStateFlow()
 
+    /** 是否已经开始过版本探测（同一个源只探一次）。 */
+    private var versionsProbedFor: String? = null
+
+    /**
+     * 按需探测镜像精确版本：由「容器与镜像」页首次显示时调用。
+     *
+     * 不放 init 里是因为探测目标 doi-janky.infosiftr.net 在国内不可达，每个 URL 要等满 6 秒
+     * 超时；启动时自动跑等于白占十几秒 IO，而这份数据只在镜像页才有用。
+     * 已探过的源不重复探（成功结果 probe 内部还有缓存）。
+     */
+    fun probeImageVersions() {
+        val sourceId = _selectedImageSource.value
+        if (versionsProbedFor == sourceId) return
+        versionsProbedFor = sourceId
+        viewModelScope.launch {
+            val entries = _imageCatalog.value
+            val versions = entries.mapNotNull { entry ->
+                val url = containerImageCatalog.versionUrlFor(
+                    entry, sourceId, ContainerImageCatalog.CURRENT_ABI
+                ) ?: return@mapNotNull null
+                containerImageVersionProbe.probe(url)?.let { entry.id to it }
+            }.toMap()
+            if (versions.isNotEmpty()) {
+                _imageVersions.value = _imageVersions.value + versions
+            }
+        }
+    }
+
     private val _containerImageDownload = MutableStateFlow<ContainerImageDownloadUiState>(ContainerImageDownloadUiState.Idle)
     val containerImageDownload: StateFlow<ContainerImageDownloadUiState> = _containerImageDownload.asStateFlow()
 
@@ -844,19 +872,11 @@ class SettingsViewModel @Inject constructor(
             }.collect { _sourceUnavailableIds.value = it }
         }
         // 精确版本探测：Debian 之类的条目内置值只有主版本，而 rootfs 内容随上游滚动，
-        // 故按「当前源 + 当前架构」读版本文件补上补丁号。失败静默保留内置版本；
-        // 切源后重探（版本文件 URL 随源变化），collectLatest 顺带取消上一轮未完成的探测。
-        viewModelScope.launch {
-            combine(_imageCatalog, _selectedImageSource) { entries, sourceId -> entries to sourceId }
-                .collectLatest { (entries, sourceId) ->
-                    _imageVersions.value = entries.mapNotNull { entry ->
-                        val url = containerImageCatalog.versionUrlFor(
-                            entry, sourceId, ContainerImageCatalog.CURRENT_ABI
-                        ) ?: return@mapNotNull null
-                        containerImageVersionProbe.probe(url)?.let { entry.id to it }
-                    }.toMap()
-                }
-        }
+        // 故按「当前源 + 当前架构」读版本文件补上补丁号。
+        //
+        // 关键：**不在 init 里自动跑**。它请求的是 doi-janky.infosiftr.net，国内不可达，
+        // 每个 URL 要等满 6 秒超时：启动时会白占十几秒 IO 与连接池（日志实测两次 timeout），
+        // 而这份数据只在「容器与镜像」页才有用。改为由该页面首次显示时调 [probeImageVersions]。
         // 公告按「内容哈希比对」判断是否弹出：首次（无哈希）或内容更新（哈希不一致）即弹。
         viewModelScope.launch {
             combine(_languageTag, containerSettingsRepository.announcementShownHashFlow) { tag, storedHash ->

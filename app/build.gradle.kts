@@ -1,5 +1,10 @@
+import java.io.ByteArrayOutputStream
 import java.io.FileInputStream
 import java.util.Properties
+import javax.inject.Inject
+import org.gradle.api.provider.ValueSource
+import org.gradle.api.provider.ValueSourceParameters
+import org.gradle.process.ExecOperations
 
 plugins {
     id("com.android.application")
@@ -24,13 +29,42 @@ if (keystorePropertiesFile.exists()) {
 //   1. 若当前 commit 刚好有 tag（如 v1.7.0 或 v1.7.0-rc1），直接提取为 "1.7.0" 或 "1.7.0-rc1"；
 //   2. 若当前 commit 比上个 tag 多了 N 个提交（如 v1.7.0-2-g04bc2fa），提取为 "1.7.0-dev.2+g04bc2fa"；
 //   3. 若无 git 环境或报错，fallback 到默认版本号 "1.7.0-dev"。
-// providers.exec 而非 Runtime.exec：配置缓存要求配置阶段的外部进程调用登记为 provider 输入，
-// 直接 fork 会让缓存条目被丢弃（external process started）。
-val gitDescribeOutput = providers.exec {
-    workingDir = rootProject.projectDir
-    commandLine("git", "describe", "--tags", "--always", "--dirty")
-    isIgnoreExitValue = true
-}.standardOutput.asText
+// prov iders.exec 在配置缓存下的坑：它把「外部进程」登记为 provider 输入，但**不追踪 git 状态**。
+// 提交后重编，配置缓存不失效，git describe 的旧值被复用，于是包里的版本号与实际代码不符
+// （例：代码已是 357af5f，版本号仍显示 593af7e-dirty）。
+// 改用 ValueSource：每次从缓存取配置时重新求值，Gradle 也把它当作真正的构建输入。
+abstract class GitDescribeValueSource : ValueSource<String, ValueSourceParameters.None> {
+    @get:Inject
+    abstract val execOps: ExecOperations
+
+    override fun obtain(): String = runCatching {
+        val out = ByteArrayOutputStream()
+        execOps.exec {
+            commandLine("git", "describe", "--tags", "--always", "--dirty")
+            standardOutput = out
+            isIgnoreExitValue = true
+        }
+        String(out.toByteArray()).trim()
+    }.getOrDefault("")
+}
+
+abstract class GitCommitCountValueSource : ValueSource<String, ValueSourceParameters.None> {
+    @get:Inject
+    abstract val execOps: ExecOperations
+
+    override fun obtain(): String = runCatching {
+        val out = ByteArrayOutputStream()
+        execOps.exec {
+            commandLine("git", "rev-list", "--count", "HEAD")
+            standardOutput = out
+            isIgnoreExitValue = true
+        }
+        String(out.toByteArray()).trim()
+    }.getOrDefault("")
+}
+
+val gitDescribeOutput = providers.of(GitDescribeValueSource::class.java) {}
+val gitCommitCountOutput = providers.of(GitCommitCountValueSource::class.java) {}
 
 fun gitVersionName(): String = try {
     val raw = gitDescribeOutput.get().trim()
@@ -57,13 +91,7 @@ fun gitVersionName(): String = try {
 
 // versionCode 从 git 提交数自动生成：随每次提交单调递增，无需手动维护，
 // 杜绝"升 versionName 忘升 versionCode"导致升级判定失效。
-// 工作目录用 rootProject.projectDir（仓库根），无 git 环境（如下载 zip 构建）时 fallback 到 1。
 // CI 额外校验 versionCode 单调（见 .github/workflows/android-release.yml），防 rebase/squash 改写历史导致回退。
-val gitCommitCountOutput = providers.exec {
-    workingDir = rootProject.projectDir
-    commandLine("git", "rev-list", "--count", "HEAD")
-    isIgnoreExitValue = true
-}.standardOutput.asText
 
 fun gitCommitCount(): Int = try {
     gitCommitCountOutput.get().trim().toIntOrNull() ?: 1

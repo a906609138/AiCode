@@ -1404,8 +1404,11 @@ fun SettingsScreen(
                         )
                     }
                 }
-                SettingsSection.Container -> ContainerSection(
-                    profiles = containerProfiles,
+                SettingsSection.Container -> {
+                    // 进镜像页才捱版本探测：目标域名国内不可达，启动时不应当去碰。
+                    LaunchedEffect(Unit) { viewModel.probeImageVersions() }
+                    ContainerSection(
+                        profiles = containerProfiles,
                     activeProfileId = activeProfileId,
                     defaultContainerId = defaultContainerId,
                     osMap = containerOsMap,
@@ -1430,6 +1433,7 @@ fun SettingsScreen(
                         viewModel.reorderContainerProfiles(fromIndex, toIndex)
                     }
                 )
+                }
                 SettingsSection.ContainerDownloads -> ContainerImageDownloadSection(
                     catalog = imageCatalog,
                     imageVersions = imageVersions,
