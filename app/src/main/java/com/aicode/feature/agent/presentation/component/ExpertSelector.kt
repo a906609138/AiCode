@@ -126,6 +126,16 @@ private fun ExpertPickerSheet(
                     modifier = Modifier.padding(vertical = Spacing.md)
                 )
             }
+            // 会话已绑定的专家被禁用后会从列表消失，这里得给个交代：
+            // 否则用户看到「不使用专家」未选中、又找不到当前专家，会以为界面出错。
+            if (currentExpertName != null && experts.none { it.name == currentExpertName }) {
+                Text(
+                    text = stringResource(R.string.expert_disabled_hint, currentExpertName),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = Spacing.sm)
+                )
+            }
         }
     }
 }

@@ -35,6 +35,7 @@
     <string name="expert_none_desc">Back to the default assistant</string>
     <string name="expert_use">Summon</string>
     <string name="expert_in_use">In use</string>
+    <string name="expert_disabled_hint">The bound expert "%1$s" is disabled and no longer applies. Re-enable it in Settings → Experts.</string>
     <string name="expert_empty_hint">No expert definitions yet. Drop a &lt;name&gt;.md into the experts directory to add one.</string>
         <string name="common_search">Search</string>
 <string name="skill_store_title">Skill store</string>

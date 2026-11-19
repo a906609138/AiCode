@@ -35,6 +35,7 @@
     <string name="expert_none_desc">回到默认助手身份</string>
     <string name="expert_use">召唤</string>
     <string name="expert_in_use">使用中</string>
+    <string name="expert_disabled_hint">当前绑定的专家「%1$s」已被禁用，不再生效；可在设置 → 专家中启用。</string>
     <string name="expert_empty_hint">还没有专家定义。在设置 → 提示词同级的 experts 目录放入 &lt;名称&gt;.md 即可新增。</string>
         <string name="common_search">搜索</string>
 <string name="skill_store_title">技能商店</string>

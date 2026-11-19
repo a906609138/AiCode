@@ -1351,7 +1351,13 @@ class AIAgentViewModel @Inject constructor(
             .distinctUntilChanged()
             .map { root ->
                 withContext(Dispatchers.IO) {
-                    runCatching { expertDefinitionRepository.listAll(root) }.getOrDefault(emptyList())
+                    runCatching {
+                        // 禁用名单由「设置 → 专家」维护：被禁用的专家不能出现在会话的召唤列表里，
+                        // 否则用户可以选到它，却因为禁用而在提示词里看不到人设，行为难以解释。
+                        val disabled = expertDefinitionRepository.disabled(root)
+                        expertDefinitionRepository.listAll(root)
+                            .filter { it.name.lowercase() !in disabled }
+                    }.getOrDefault(emptyList())
                 }
             }
             .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())

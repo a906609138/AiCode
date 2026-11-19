@@ -1216,12 +1216,15 @@ class AgentRunManager @Inject constructor(
                     ?.let { agentDefinitionRepository.findIncludingDisabled(it) }
             }
             // 专家只作用于根会话：子代理会话有自己的 agentDefinition，不再叠加角色。
+            // 已被禁用的专家不注入：设置里禁用后，停在旧会话里的绑定不该继续生效。
             val expertDefinition = withContext(Dispatchers.IO) {
                 if (sessionEntity?.parentId != null) {
                     null
                 } else {
-                    sessionEntity?.expertName?.takeIf { it.isNotBlank() }
-                        ?.let { expertDefinitionRepository.findByName(it, projectRoot) }
+                    sessionEntity?.expertName?.takeIf { it.isNotBlank() }?.let { name ->
+                        val blocked = name.lowercase() in expertDefinitionRepository.disabled(projectRoot)
+                        if (blocked) null else expertDefinitionRepository.findByName(name, projectRoot)
+                    }
                 }
             }
 
