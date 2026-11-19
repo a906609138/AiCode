@@ -119,6 +119,17 @@ runtime_pkgs() {
     esac
 }
 
+# ── 报表/数据可视化附加包（Pillow + 中文字体），在 Python 运行时之外额外安装 ──
+# 由 viz 场景调用；字体用于 Pillow 绘制中文标题与坐标轴标签，缺字体会渲染成方框。
+viz_runtime_pkgs() {
+    case "$PMGR" in
+        apk)     echo "py3-pillow font-wqy-zenhei" ;;
+        apt)     echo "python3-pil fonts-wqy-zenhei" ;;
+        dnf|yum) echo "python3-pillow wqy-zenhei-fonts" ;;
+        pacman)  echo "python-pillow wqy-zenhei" ;;
+    esac
+}
+
 # ── 列出某包在仓库中的可用版本（每行一个，最新在前；保留完整版本串供安装固定；失败返回空）──
 pkg_versions() {
     pkg="$1"
@@ -610,7 +621,7 @@ EOF
 # ── 场景框架 ──
 # 每个开发环境一个脚本，放在 lib/scenarios/ 下，定义 scenario_name_<id> 与 install_scenario_<id>；
 # SCENARIO_IDS 决定菜单顺序。android / flutter 较重，逻辑在各自文件里（共用 lib/android-sdk.sh）。
-SCENARIO_IDS="common python node android flutter java go rust php base"
+SCENARIO_IDS="common viz python node android flutter java go rust php base"
 
 # 载入共享工具与各场景脚本（android-sdk.sh 供 android / flutter 场景共用）
 [ -f "$AICODE_LIB_DIR/android-sdk.sh" ] && . "$AICODE_LIB_DIR/android-sdk.sh"

@@ -26,21 +26,35 @@ description: 图表选型、绘制与检查的流程。做数据可视化、报�
 
 2. **探测绘图环境**（别假设库已装）：
    ```sh
-   python3 -c "import matplotlib; print(matplotlib.__version__)"
-   python3 -c "import pandas; print(pandas.__version__)"
+   python3 -c "import PIL; print('pillow', PIL.__version__)" 2>/dev/null
+   python3 -c "import matplotlib; print('matplotlib', matplotlib.__version__)" 2>/dev/null
    ```
-   - **有 matplotlib** → 出 PNG；
-   - **没有** → 优先生成**自包含 HTML（内联 SVG/Canvas）**或纯 SVG 文件——无需装任何东西，浏览器与 App 的 WebView 都能直接打开。不要为了画图先让用户装一堆依赖。
+   - **有 Pillow / matplotlib** → 出 PNG；
+   - **都没有** → 优先生成**自包含 HTML（内联 SVG/Canvas）**或纯 SVG 文件——无需装任何东西，浏览器与 App 的 WebView 都能直接打开。不要为了画图先让用户装一堆依赖。
+   - 用户想要 PNG 报表但环境缺 Pillow / 中文字体时，提示：终端运行 `aicode` → 选「报表/数据可视化（Python 3 + Pillow + 中文字体）」场景安装。
 
 3. **绘制要点**：
    - 标题写**结论**：「Q2 销量环比 +18%」，而不是「销量图」；
    - 坐标轴标单位；关键数值直接标在图上，别让读者估；
    - 配色克制：同一含义同一颜色；类别多时用同色系深浅；
    - 去掉无意义的网格线、3D 效果、阴影。
+   - **Pillow 画中文**：字体不能省，缺字体中文全变方框；用 glob 探测真实路径，别硬编码：
+     ```python
+     import glob
+     from PIL import ImageFont
+     cands = (glob.glob('/usr/share/fonts/**/*wqy*', recursive=True)
+              + glob.glob('/usr/share/fonts/**/*CJK*', recursive=True))
+     font = ImageFont.truetype(cands[0], 24) if cands else ImageFont.load_default()
+     ```
+     PNG 存到工作区（如 `~/workspace/report.png`）。
 
 4. **自检**：生成后用 `viewImage` 实际看一眼——文字有没有重叠、标签有没有被截断、图例有没有挡住数据、坐标轴范围是否误导。
 
-5. **交付**：`sendFile` 给出图片或 HTML 文件，并附一句读图说明。
+5. **交付**：正文用 markdown 图片语法内联显示本地图片（宿主会经 `FileAccessProvider` 落到本地再渲染，点一下可全屏看原图）：
+   ```markdown
+   ![](~/workspace/report.png)
+   ```
+   路径写**容器视角**（`~/workspace/...` 或容器绝对路径，相对路径也行），并附一句读图说明。非图片文件（HTML/SVG）用 `sendFile` 给出。
 
 ## 注意
 

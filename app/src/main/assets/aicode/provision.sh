@@ -11,7 +11,7 @@
 # 注意：apk 源分支 v3.21 需与 assets 内 alpine-rootfs 的 Alpine 分支一致（见 ContainerInstaller.ROOTFS_ASSET_VERSION）。
 # 不用 ContainerInstaller.INSTALL_VERSION 对照：那是「是否需要重装」的标记，刻意与 assets 的 Alpine 版本解耦。
 
-PROVISION_VERSION="provision-script-v9"
+PROVISION_VERSION="provision-script-v10"
 PROVISION_SKIPPED="provision-script-skipped"
 MARKER="/.provisioned"
 
