@@ -1,5 +1,11 @@
 package com.aicode.feature.agent.presentation.component
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
@@ -72,6 +78,10 @@ import com.aicode.core.theme.Spacing
 import com.aicode.core.theme.semanticColors
 import com.aicode.feature.agent.domain.session.SessionUseCase
 import com.aicode.feature.agent.presentation.AgentUIMessage
+import com.aicode.feature.settings.domain.model.AdaptiveCardAction
+import com.aicode.feature.settings.domain.model.AdaptiveCardRoot
+import com.aicode.feature.settings.domain.parser.AdaptiveCardParser
+import androidx.compose.ui.platform.LocalContext
 import com.aicode.core.ui.ExpandableChevronIcon
 import compose.icons.FeatherIcons
 import compose.icons.feathericons.Check
@@ -164,6 +174,10 @@ internal fun ToolMessageBody(
                     } else null,
                     webSearch = if (message.toolName == "websearch" && !running && !message.isError) {
                         parseWebSearchResult(message.content)
+                    } else null,
+                    // showCard：工具返回的卡片 JSON 常显在消息下方，不跟着工具行折叠走。
+                    card = if (message.toolName == "showCard" && !running && !message.isError) {
+                        parseCardPayload(message.content)
                     } else null,
                     // task 的卡片连「派发中」也要显示（此时结果还没到，只有参数），故不受 running 限制。
                     subAgent = if (message.toolName == "task" && !message.isError) {
@@ -413,6 +427,11 @@ internal fun ToolMessageBody(
                 }
             }
         }
+        // 卡片常显理由同上：卡片本身就是内容，藏进折叠里等于没渲染。
+        metadata?.card?.let { card ->
+            Spacer(Modifier.height(Spacing.xs))
+            ShowCardBubble(card = card)
+        }
         // 子代理派发卡片常显，不跟着「工具行展开」走：这是「谁在做什么、结果如何」的主信息，
         // 藏进折叠里就失去意义。原始参数/结果仍可通过展开工具行查看。
         metadata?.subAgent?.let { dispatch ->
@@ -438,6 +457,7 @@ private data class ToolMessageMetadata(
     val edit: EditDiff?,
     val todo: ParsedTodoResult?,
     val webSearch: ParsedWebSearchResult?,
+    val card: AdaptiveCardRoot? = null,
     val subAgent: ParsedSubAgentDispatch?,
     val notifications: List<ToolNotificationInfo>,
     val hasResult: Boolean
@@ -971,6 +991,64 @@ internal fun formatToolResult(raw: String): String {
         }
     }
     return s
+}
+
+/**
+ * 解析 showCard 的工具结果：`{"status":"success","data":{"card":{...}}}`。
+ * 卡片必须是对象或可直接解析的字符串，解析后至少有一个元素才算成功。
+ */
+internal fun parseCardPayload(raw: String): AdaptiveCardRoot? {
+    val obj = parseToolTransport(raw.withoutToolStatusPrefix()) ?: return null
+    if (obj["status"]?.jsonPrimitive?.contentOrNull == "error") return null
+    val data = obj["data"] as? JsonObject ?: return null
+    val node = data["card"] ?: return null
+    val card = when (node) {
+        is JsonObject -> AdaptiveCardParser.parseAdaptiveCard(node)
+        is JsonPrimitive -> AdaptiveCardParser.parseAdaptiveCard(node.contentOrNull.orEmpty())
+        else -> return null
+    }
+    return card.takeIf { it.body.isNotEmpty() }
+}
+
+@Composable
+private fun ShowCardBubble(card: AdaptiveCardRoot) {
+    val context = LocalContext.current
+    val onAction: (AdaptiveCardAction) -> Unit = { action ->
+        when (action) {
+            is AdaptiveCardAction.OpenUrl -> runCatching {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse(action.url)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                )
+            }.onFailure {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.common_open_link_failed),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            is AdaptiveCardAction.CopyToClipboard -> runCatching {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                clipboard?.setPrimaryClip(ClipData.newPlainText(action.title, action.value))
+            }.onFailure {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.common_copy_failed),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(Radius.mdLarge))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f))
+            .padding(Spacing.md)
+    ) {
+        AdaptiveCardView(card = card, isExpanded = true, onAction = onAction)
+    }
 }
 
 private fun parseToolTransport(raw: String): JsonObject? {

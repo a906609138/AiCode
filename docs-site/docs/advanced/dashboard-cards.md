@@ -384,6 +384,28 @@ AICODE_KEY_ACCOUNT_ID=<当前 API Key>。
   | `color` | String | `"Default"` | 图标颜色（语义色或 Hex） |
   | `padding` / `margin` | Number / Array / Object | `null` | 内/外边距 |
 
+#### `Chart`（图表）
+一次画出柱状、横向条形、折线或环形图。数据全部在本地绘制，不联网、不引外部图表库。适合展示趋势、配额分布、用量对比。
+
+- **属性说明**：
+  | 属性 | 类型 | 默认值 | 说明 |
+  | :--- | :--- | :--- | :--- |
+  | `type` | String | 固定 `"Chart"` | 别名：`graph`、`plot`、`barchart`、`linechart`、`donut` |
+  | `kind` | String | `"bar"` | `bar` 竖柱、`hbar` 横向条、`line` 折线、`donut` 环形（`pie`/`ring` 同义） |
+  | `categories` | Array<String> | `[]` | 分类轴标签，与每个系列的 `values` 一一对应 |
+  | `series` | Array<Series\> | `[]` | 数据系列，每项 `{ "name": "名称", "values": [120, 180], "color": "Accent" }`；`donut` 只取第一组 |
+  | `unit` | String | `""` | 数值单位，拼在数值后面（如 `"次"`、`"%"`） |
+  | `caption` | String | `""` | 图表底部说明文字 |
+  | `height` | Int | `150` | 绘图区高度（dp） |
+  | `showValues` | Boolean | `true` | 是否在柱端或数据点上标数值 |
+  | `showLegend` | Boolean | `true` | 多系列时是否显示图例 |
+  | `minValue` / `maxValue` | Float | `null` | 手动指定纵轴范围，不填按数据自动取 |
+
+- **示例**：
+  ```json
+  { "type": "Chart", "kind": "bar", "categories": ["周一", "周二", "周三"], "series": [{ "name": "请求", "values": [120, 180, 140] }], "unit": "次", "caption": "近三天请求量" }
+  ```
+
 #### `Divider`（分割线）
 横向分隔线，用于划分卡片的不同内容区块。
 
@@ -662,6 +684,29 @@ Adaptive Cards 使用语义色彩系统，确保在亮色模式（Light Mode）�
         { "type": "Metric", "label": "配额", "value": "82%", "color": "Attention" }
       ]
     }
+  ]
+}
+```
+
+---
+
+## 9. 在对话里直接出卡片（`showCard` 工具）
+
+同一套 Adaptive Card 规范也开放给了 AI：模型在对话里调用 `showCard` 工具，把卡片作为消息内容渲染，不需要写面板脚本、也不需要配置供应商。
+
+- 卡片常显在工具行下方，不跟着「展开工具详情」一起折叠；随消息保存，重开对话仍在。
+- 支持的元素与本文第 5 节一致，`chart` 同样可用。
+- 卡片上的按钮：`openUrl` 跳系统浏览器，`copy` 复制文本。
+- 适合放的：指标、状态、对比、明细、趋势；不适合：整段正文。普通叙述仍用 Markdown。
+
+示例（模型调用 `showCard` 时传的 `card` 参数）：
+
+```json
+{
+  "body": [
+    { "type": "TextBlock", "text": "本周构建", "weight": "Bolder", "size": "Medium" },
+    { "type": "Chart", "kind": "hbar", "categories": ["成功", "失败"], "series": [{ "name": "次数", "values": [18, 3] }], "caption": "近 7 天 CI" },
+    { "type": "FactSet", "facts": [{ "title": "平均耗时", "value": "4m12s" }] }
   ]
 }
 ```

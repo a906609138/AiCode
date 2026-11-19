@@ -43,6 +43,7 @@ import com.aicode.feature.agent.domain.tool.root.RootTool
 import com.aicode.feature.agent.domain.tool.shizuku.ShizukuTool
 import com.aicode.feature.agent.domain.tool.skill.LoadSkillTool
 import com.aicode.feature.agent.domain.tool.question.AskUserQuestionTool
+import com.aicode.feature.agent.domain.tool.card.ShowCardTool
 import com.aicode.feature.agent.domain.tool.todo.TodoTool
 import com.aicode.feature.agent.domain.tool.subagent.TaskTool
 import com.aicode.feature.agent.domain.tool.subagent.MessageParentTool
@@ -383,7 +384,8 @@ object AgentModule {
         memoryTool: MemoryTool,
         taskTool: TaskTool,
         messageParentTool: MessageParentTool,
-        browserTool: BrowserTool
+        browserTool: BrowserTool,
+        showCardTool: ShowCardTool
     ): ToolRegistry {
         return ToolRegistry().apply {
             register("readFile", readFileTool)
@@ -410,6 +412,7 @@ object AgentModule {
             register("task", taskTool)
             register("messageParent", messageParentTool)
             register("browser", browserTool)
+            register("showCard", showCardTool)
         }
     }
 

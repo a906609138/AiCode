@@ -1917,6 +1917,7 @@
     <!-- Common -->
     <string name="common_open_link_failed">Cannot open link</string>
     <string name="common_copied_with_title">Copied: %1$s</string>
+    <string name="common_copy_failed">Copy failed</string>
 
     <string name="dashboard_exec_failed">Execution failed</string>
     <string name="dashboard_query_failed">Query failed</string>
