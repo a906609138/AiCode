@@ -82,14 +82,18 @@ import com.aicode.core.ui.ImageSource
 import com.aicode.core.ui.ImageViewerHost
 import com.aicode.core.ui.ImageViewerRequest
 import com.aicode.core.ui.LocalImageViewer
+import com.aicode.core.ui.LocalVideoPlayer
 import com.aicode.core.ui.PAGE_MOTION_MS
 import com.aicode.core.ui.VerticalSplitHandle
+import com.aicode.core.ui.VideoPlayerHost
+import com.aicode.core.ui.VideoPlayerRequest
 import com.aicode.core.ui.drawerWidth
 import com.aicode.core.ui.isExpandedWidth
 import com.aicode.core.ui.pageEnter
 import com.aicode.core.ui.pageExit
 import com.aicode.core.ui.rememberEndDrawerState
 import com.aicode.core.ui.rememberImageViewerState
+import com.aicode.core.ui.rememberVideoPlayerState
 import com.aicode.core.ui.rememberViewerDecodeSpec
 import com.aicode.core.util.ApkInstaller
 import com.aicode.feature.agent.presentation.AIAgentViewModel
@@ -98,7 +102,9 @@ import com.aicode.feature.agent.presentation.component.AIChatPanel
 import com.aicode.feature.agent.presentation.component.ChatDrawerContent
 import com.aicode.feature.agent.presentation.component.LocalChatAnimationsEnabled
 import com.aicode.feature.agent.presentation.component.chatImageLoader
+import com.aicode.feature.agent.presentation.component.isVideoFileName
 import com.aicode.feature.agent.presentation.component.openSentAttachment
+import com.aicode.feature.agent.presentation.component.videoFileResolver
 import com.aicode.feature.agreement.presentation.AgreementGate
 import com.aicode.feature.editor.presentation.CodeEditorScreen
 import com.aicode.feature.editor.presentation.EditorLeaveGuard
@@ -580,11 +586,15 @@ fun AppNavigation(
         }
     }
 
-    // 文件树里点文件：图片进内置全屏查看器、APK 走系统安装器，其余仍进编辑器。
+    // 文件树里点文件：图片进内置全屏查看器、视频进内置播放器、APK 走系统安装器，其余仍进编辑器。
     val drawerImageViewerState = rememberImageViewerState()
+    val drawerVideoPlayerState = rememberVideoPlayerState()
     val drawerDecodeSpec = rememberViewerDecodeSpec()
     val drawerImageLoad = remember(agentViewModel.fileAccess, drawerDecodeSpec) {
         chatImageLoader(agentViewModel.fileAccess, drawerDecodeSpec.maxEdge, drawerDecodeSpec.maxPixels)
+    }
+    val drawerVideoResolve = remember(agentViewModel.fileAccess) {
+        videoFileResolver(agentViewModel.fileAccess)
     }
     val openTreeEntry: (String) -> Unit = { path ->
         val name = path.trimEnd('/').substringAfterLast('/')
@@ -592,6 +602,9 @@ fun AppNavigation(
         when {
             ext in PREVIEWABLE_IMAGE_EXTS -> drawerImageViewerState.show(
                 ImageViewerRequest(listOf(ImageSource.ContainerPath(path)), name)
+            )
+            isVideoFileName(name) -> drawerVideoPlayerState.show(
+                VideoPlayerRequest(listOf(ImageSource.ContainerPath(path)), name)
             )
             ext in INSTALLABLE_APK_EXTS -> scope.launch {
                 openSentAttachment(
@@ -1135,11 +1148,13 @@ fun AppNavigation(
 
     CompositionLocalProvider(
         LocalOnboardingTargetRegistry provides onboardingRegistry,
-        LocalImageViewer provides drawerImageViewerState
+        LocalImageViewer provides drawerImageViewerState,
+        LocalVideoPlayer provides drawerVideoPlayerState
     ) {
     Box(modifier = Modifier.fillMaxSize()) {
-    // 文件树里点开的图片走这个查看器；聊天面板自带一个，两层互不影响。
+    // 文件树里点开的图片 / 视频走这两个宿主；聊天面板自带一套，两层互不影响。
     ImageViewerHost(state = drawerImageViewerState, load = drawerImageLoad)
+    VideoPlayerHost(state = drawerVideoPlayerState, resolve = drawerVideoResolve)
     if (expanded) {
         // 大屏左侧会话侧栏常驻，不走 ModalNavigationDrawer；右侧工具抽屉仍用 Modal 覆盖内容区。
         // 侧栏只在聊天页展开：设置页自己就是「菜单 + 详情」两栏，外面再套一层会话侧栏就成了三栏。

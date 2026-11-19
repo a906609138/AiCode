@@ -534,6 +534,9 @@
     <string name="chat_open_apk_permission">Installing apps requires permission. Allow installs from this source in the settings that just opened</string>
     <string name="chat_attachment_preview">Preview %1$s</string>
     <string name="chat_attachment_open">Open %1$s</string>
+    <string name="chat_video_preparing">Preparing video…</string>
+    <string name="chat_video_unplayable">This video cannot be played here. Try opening it with another app.</string>
+    <string name="chat_video_play">Play %1$s</string>
     <string name="chat_no_model_selected">No model selected</string>
     <string name="chat_open_git">Open Git</string>
     <string name="chat_open_terminal">Open terminal</string>

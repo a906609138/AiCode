@@ -37,6 +37,7 @@ import com.aicode.core.theme.Brand
 import com.aicode.core.theme.Radius
 import com.aicode.core.theme.Spacing
 import com.aicode.core.ui.LocalImageViewer
+import com.aicode.core.ui.LocalVideoPlayer
 import com.aicode.core.ui.ThumbnailCache
 import com.aicode.core.util.ApkInstaller
 import com.aicode.feature.agent.presentation.AgentAttachment
@@ -45,6 +46,7 @@ import compose.icons.FeatherIcons
 import compose.icons.feathericons.ChevronRight
 import compose.icons.feathericons.FileText
 import compose.icons.feathericons.Image
+import compose.icons.feathericons.Play
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -59,8 +61,9 @@ private val AttachmentThumbSize = 44.dp
  * 整行可点。不再用横向滚动的方形卡片带：76dp 的格子里文件名必被截断，多个文件还得左右滑，
  * 一行一个才能一眼看清发的是哪几份。
  *
- * 点击语义：图片一律走内置全屏查看器（隐式依赖组合树上层提供 [LocalImageViewer]，聊天区都满足）；
- * 非图片用调用方给的 [onClick] —— 工具卡片传的是「系统 app 打开」，助手气泡不传即不可点。
+ * 点击语义：图片走内置全屏查看器、视频走内置播放器（隐式依赖组合树上层提供 [LocalImageViewer] /
+ * [LocalVideoPlayer]，聊天区都满足，宿主没挂时静默无反应）；其余文件用调用方给的 [onClick] ——
+ * 工具卡片传的是「系统 app 打开」，助手气泡不传即不可点。
  */
 @Composable
 internal fun MessageAttachmentList(
@@ -85,20 +88,28 @@ private fun MessageAttachmentRow(
     onClick: ((AgentAttachment) -> Unit)? = null
 ) {
     val viewer = LocalImageViewer.current
-    val handler: (() -> Unit)? = if (attachment.isImage) {
-        { viewer.show(attachment.toViewerRequest()) }
-    } else if (onClick != null) {
-        { onClick(attachment) }
-    } else {
-        null
+    val videoPlayer = LocalVideoPlayer.current
+    val isVideo = attachment.isVideoFile()
+    val handler: (() -> Unit)? = when {
+        attachment.isImage -> {
+            { viewer.show(attachment.toViewerRequest()) }
+        }
+        // 视频交给内置播放器：生成或收到的视频不再弹「用哪个应用打开」。
+        isVideo -> {
+            { videoPlayer.show(attachment.toVideoRequest()) }
+        }
+        onClick != null -> {
+            { onClick(attachment) }
+        }
+        else -> null
     }
     val fallbackName = stringResource(R.string.common_file)
     val name = attachment.fileName.ifBlank { fallbackName }
     // 读屏与长按提示用：图片是「预览」，其它是「打开」，两者落到的地方不一样。
-    val actionLabel = if (attachment.isImage) {
-        stringResource(R.string.chat_attachment_preview, name)
-    } else {
-        stringResource(R.string.chat_attachment_open, name)
+    val actionLabel = when {
+        attachment.isImage -> stringResource(R.string.chat_attachment_preview, name)
+        isVideo -> stringResource(R.string.chat_video_play, name)
+        else -> stringResource(R.string.chat_attachment_open, name)
     }
     // 次要信息：大小 + 容器路径。路径对「AI 发过来的文件」是关键信息（能直接在终端/编辑器里找到），
     // 整行放不下时靠省略号截断，不换行。
@@ -171,7 +182,8 @@ private fun AttachmentThumb(attachment: AgentAttachment) {
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Icon(
-                    FeatherIcons.FileText,
+                    // 视频用播放三角，非视频仍是文件图标：一眼区分「点开会播」和「点开交给系统」。
+                    if (attachment.isVideoFile()) FeatherIcons.Play else FeatherIcons.FileText,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)

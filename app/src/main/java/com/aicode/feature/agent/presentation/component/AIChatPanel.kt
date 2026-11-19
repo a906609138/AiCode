@@ -80,8 +80,11 @@ import com.aicode.R
 import com.aicode.core.theme.Spacing
 import com.aicode.core.ui.ImageViewerHost
 import com.aicode.core.ui.LocalImageViewer
+import com.aicode.core.ui.LocalVideoPlayer
 import com.aicode.core.ui.readableContentMaxWidth
+import com.aicode.core.ui.VideoPlayerHost
 import com.aicode.core.ui.rememberImageViewerState
+import com.aicode.core.ui.rememberVideoPlayerState
 import com.aicode.core.ui.rememberViewerDecodeSpec
 import com.aicode.feature.agent.domain.tool.question.UserQuestionAnswer
 import com.aicode.feature.agent.presentation.AgentUIMessage
@@ -1493,9 +1496,13 @@ fun AIChatPanel(
         MarkdownImageTransformer(viewModel.fileAccess)
     }
     val imageViewerState = rememberImageViewerState()
+    val videoPlayerState = rememberVideoPlayerState()
     val viewerDecodeSpec = rememberViewerDecodeSpec()
     val chatImageLoad = remember(viewModel.fileAccess, viewerDecodeSpec) {
         chatImageLoader(viewModel.fileAccess, viewerDecodeSpec.maxEdge, viewerDecodeSpec.maxPixels)
+    }
+    val chatVideoResolve = remember(viewModel.fileAccess) {
+        videoFileResolver(viewModel.fileAccess)
     }
 
     // 文件卡片点击用系统 app 打开：重取/拷贝需要在 IO 线程跑（远程模式要下载），故由这里注入协程。
@@ -1584,6 +1591,7 @@ fun AIChatPanel(
     CompositionLocalProvider(
         LocalMarkdownImageTransformer provides markdownImageTransformer,
         LocalImageViewer provides imageViewerState,
+        LocalVideoPlayer provides videoPlayerState,
         LocalAttachmentOpener provides attachmentOpener,
         LocalSubAgentCardHost provides SubAgentCardHost(
             states = subAgentCards,
@@ -2039,6 +2047,7 @@ fun AIChatPanel(
         // Dialog 是独立 window、不占父布局尺寸，挂在 Scaffold 之后即可覆盖整屏 ——
         // 平板双栏下不会只盖住聊天列，也不会被 MainActivity 画在最上层的全局背景水印压住。
         ImageViewerHost(state = imageViewerState, load = chatImageLoad)
+        VideoPlayerHost(state = videoPlayerState, resolve = chatVideoResolve)
     }
 }
 
