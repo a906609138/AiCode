@@ -23,6 +23,10 @@ on:
       - 'LICENSE'
       - '.gitignore'
 
+  # 允许在 Actions 页面手动重跑，不必为了验证链路造一次提交。
+  # fork 仓库的 pull_request 事件不一定能触发工作流，手动触发是最稳的兜底入口。
+  workflow_dispatch:
+
 # 同分支新提交到来时取消正在跑的旧 run，省 CI 额度。
 concurrency:
   group: ci-${{ github.ref }}
