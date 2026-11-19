@@ -79,10 +79,8 @@ private val IMAGE_EXTS = setOf(
     "heic", "heif", "avif", "tif", "tiff"
 )
 
-/** 视频媒体格式。 */
-private val VIDEO_EXTS = setOf(
-    "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm"
-)
+/** 视频媒体格式。与内置播放器共用同一份判定（见 PLAYABLE_VIDEO_EXTENSIONS），避免「有播放图标却播不了」。 */
+private val VIDEO_EXTS = PLAYABLE_VIDEO_EXTENSIONS
 
 /** 音频格式。 */
 private val AUDIO_EXTS = setOf(

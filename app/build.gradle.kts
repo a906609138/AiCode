@@ -330,6 +330,10 @@ dependencies {
     // Vico 图表（Token 统计趋势图）
     implementation("com.patrykandpatrick.vico:compose-m3:2.4.4")
 
+    // 视频播放（内置播放器）：只取 exoplayer 内核与现成控制条，不引 HLS/DASH 等扩展模块。
+    implementation("androidx.media3:media3-exoplayer:1.8.1")
+    implementation("androidx.media3:media3-ui:1.8.1")
+
     // Lifecycle + ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")

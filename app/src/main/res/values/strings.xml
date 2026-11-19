@@ -534,6 +534,9 @@
     <string name="chat_open_apk_permission">安装应用需要授权，请在跳转的设置中允许来自此来源的应用</string>
     <string name="chat_attachment_preview">预览 %1$s</string>
     <string name="chat_attachment_open">打开 %1$s</string>
+    <string name="chat_video_preparing">正在准备视频…</string>
+    <string name="chat_video_unplayable">这个视频无法播放，可以退回用其他应用打开</string>
+    <string name="chat_video_play">播放 %1$s</string>
     <string name="chat_no_model_selected">未选择模型</string>
     <string name="chat_open_git">打开 Git</string>
     <string name="chat_open_terminal">打开终端</string>
