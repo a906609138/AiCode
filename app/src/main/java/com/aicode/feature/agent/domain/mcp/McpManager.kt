@@ -16,11 +16,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
@@ -55,7 +58,13 @@ class McpManager @Inject constructor(
 ) {
     private companion object {
         const val TAG = "McpManager"
+
+        /** 等插件记录读完的上限：插件可贡献 MCP server，但卡住启动得不偿失。 */
+        const val PLUGIN_LOAD_WAIT_MS = 3_000L
     }
+
+    /** 插件记录是否已装载过（initialLoad 等完 isLoaded 后置 true）；用于吞掉启动期那几帧。 */
+    private val pluginLoadSettled = java.util.concurrent.atomic.AtomicBoolean(false)
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val reloadMutex = Mutex()
@@ -66,15 +75,23 @@ class McpManager @Inject constructor(
     private val _statuses = MutableStateFlow<List<McpServerStatus>>(emptyList())
     val statuses: StateFlow<List<McpServerStatus>> = _statuses.asStateFlow()
 
-    /** 启动首帧的唯一一次加载：配置 + 工作区就绪后的完整 reload。 */
+    /**
+     * 启动首帧的唯一一次加载。
+     *
+     * 等插件记录读完再 reload：插件能贡献 MCP server，不等就会漏掉（之后也只会因为
+     * 「列表从空变有」而多跑一次，白白多一轮 teardown/建连）。
+     * 等不到也不算错——超时后照样继续，宁可少一个插件贡献的 server 也不要卡启动。
+     */
     private suspend fun initialLoad() {
+        runCatching {
+            withTimeoutOrNull(PLUGIN_LOAD_WAIT_MS) { pluginManager.isLoaded.first { it } }
+        }
+        pluginLoadSettled.set(true)
         reload()
     }
 
     fun start() {
-        // 三条触发源合并成一路，**丢弃首帧**：三个 Flow 启动时都会立即发射当前值，
-        // 若各自 collect 就会在启动瞬间跑三次 reload（日志实测三次）。
-        // 首次加载由下面单独的 initialLoad 负责，这里只管后续变化。
+        // 首次加载等插件记录读完再跑：插件能贡献 MCP server，早跑会漏掉它们。
         scope.launch {
             initialLoad()
         }
@@ -82,7 +99,12 @@ class McpManager @Inject constructor(
             merge(
                 workspaceRepository.current.drop(1).map { },
                 configRepository.externalChanges.map { },
-                pluginManager.plugins.drop(1).map { }
+                // plugins 是 StateFlow：初值空列表，磁盘读完 publish 真实列表。
+                // 首次加载已由 initialLoad 等完 isLoaded 后跑过，这里只关心「后续真的变了」。
+                // 用运行期快照对比：第一次收到的直接当基线吞掉，之后列表内容变化才触发。
+                pluginManager.plugins
+                    .filter { pluginLoadSettled.get() }
+                    .map { }
             ).collect {
                 reload()
             }
