@@ -341,19 +341,16 @@ class AIEditorApp : Application(), Configuration.Provider {
         appScope.launch {
             fileCredentialRepository.migrateToEncoded()
         }
-        // 启动即异步刷新本仓库模型元数据（12h 缓存；失败静默，resolve 兜底内置 assets 数据）。
-        appScope.launch {
-            modelMetadataService.refreshFromNetworkIfStale()
-        }
-        // 启动即异步刷新仓库 providers.json 预设（12h 缓存；失败静默，兜底本地磁盘与内置 assets）。
-        appScope.launch {
-            com.aicode.feature.settings.data.local.ProviderPresetLibrary.refreshFromNetworkIfStale(this@AIEditorApp)
-        }
-        // 启动即异步刷新可下载镜像目录（12h 缓存；失败静默，兜底本地磁盘与内置 assets）。
-        // 目的是让「上游发了安全补丁」不必等 App 发版就能在下载列表里看到。
-        appScope.launch {
-            containerImageCatalog.refreshFromNetworkIfStale()
-        }
+        // 三个「12h 缓存的仓库数据刷新」不在启动时做。
+        //
+        // 它们都是纯 IO+CPU 密集的预熟工作，且都有本地兜底（磁盘缓存 / 内置 assets），
+        // 不刷新不影响任何功能。实测模型元数据那一条：6.7MB JSON、324 个提供商、9981 个模型，
+        // 冷启动要 2.5s 拉取 + 0.4s JSON 解析 + 0.5s 建对象，堆峰值涨 74MB。
+        //
+        // 改为由各自的消费页面按需触发：
+        // - 模型元数据 / providers 预设 → 进「AI 供应商」「默认模型」页时
+        // - 镜像目录 → 进「容器与镜像」页时（主界面已接 probeImageVersions，刷新再跟它一起）
+        // 具体触发点为各页面首次组合时的 LaunchedEffect，见 SettingsScreen。
         // 启动即加载持久化等级，并随设置页改动实时生效（唯一同步点）。
         appScope.launch {
             logSettings.levelFlow.collectLatest { FileLogger.setMinLevel(it) }

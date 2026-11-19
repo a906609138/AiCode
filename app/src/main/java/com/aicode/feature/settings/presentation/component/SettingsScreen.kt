@@ -1205,21 +1205,27 @@ fun SettingsScreen(
                     deleteExternalWorkspaceSessions = deleteExternalWorkspaceSessions,
                     onToggleDeleteExternalWorkspaceSessions = { viewModel.setDeleteExternalWorkspaceSessions(it) }
                 )
-                SettingsSection.Providers -> ProvidersSection(
-                    providers = providers,
-                    selection = selectionFor(SettingsSection.Providers),
-                    onEdit = {
-                        editingProvider = it
-                        section = SettingsSection.ProviderEditor
-                    },
-                    onDelete = { viewModel.deleteProvider(it.id) },
-                    onReorder = { fromIndex, toIndex ->
-                        viewModel.reorderProviders(fromIndex, toIndex)
-                    },
-                    onBatchDelete = { ids -> viewModel.deleteProviders(ids) },
-                    onBatchSetEnabled = { ids, enabled -> viewModel.setProvidersEnabled(ids, enabled) }
-                )
-                SettingsSection.DefaultModels -> DefaultModelsSection(
+                SettingsSection.Providers -> {
+                    // 进供应商页才刷新模型元数据与 provider 预设（12h 缓存，启动时不再拉）。
+                    LaunchedEffect(Unit) { viewModel.onModelSectionShown() }
+                    ProvidersSection(
+                        providers = providers,
+                        selection = selectionFor(SettingsSection.Providers),
+                        onEdit = {
+                            editingProvider = it
+                            section = SettingsSection.ProviderEditor
+                        },
+                        onDelete = { viewModel.deleteProvider(it.id) },
+                        onReorder = { fromIndex, toIndex ->
+                            viewModel.reorderProviders(fromIndex, toIndex)
+                        },
+                        onBatchDelete = { ids -> viewModel.deleteProviders(ids) },
+                        onBatchSetEnabled = { ids, enabled -> viewModel.setProvidersEnabled(ids, enabled) }
+                    )
+                }
+                SettingsSection.DefaultModels -> {
+                    LaunchedEffect(Unit) { viewModel.onModelSectionShown() }
+                    DefaultModelsSection(
                     providers = providers,
                     visionProviderId = visionProviderId,
                     visionModel = visionModel,
@@ -1242,7 +1248,8 @@ fun SettingsScreen(
                     onClearImageGenModel = { viewModel.clearImageGenModel() },
                     onSelectSubagentTierModel = { tier, pid, m -> viewModel.setSubagentTierModel(tier, pid, m) },
                     onClearSubagentTierModel = { tier -> viewModel.clearSubagentTier(tier) }
-                )
+                    )
+                }
                 SettingsSection.Mcp -> McpSection(
                     entries = mcpEntries,
                     statuses = mcpStatuses,
@@ -1405,8 +1412,9 @@ fun SettingsScreen(
                     }
                 }
                 SettingsSection.Container -> {
-                    // 进镜像页才捱版本探测：目标域名国内不可达，启动时不应当去碰。
-                    LaunchedEffect(Unit) { viewModel.probeImageVersions() }
+                    // 进镜像页才刷新镜像目录与探测精确版本：两者都是 12h 缓存的预热数据，
+                    // 本地磁盘与内置 assets 都有傅底，启动时不该挂在那里等。
+                    LaunchedEffect(Unit) { viewModel.onImageSectionShown() }
                     ContainerSection(
                         profiles = containerProfiles,
                     activeProfileId = activeProfileId,

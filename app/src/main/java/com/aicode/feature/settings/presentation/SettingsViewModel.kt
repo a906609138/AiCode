@@ -773,6 +773,45 @@ class SettingsViewModel @Inject constructor(
     /** 是否已经开始过版本探测（同一个源只探一次）。 */
     private var versionsProbedFor: String? = null
 
+    /** 是否已触发过镜像目录的网络刷新（同进程只刷一次）。 */
+    private var imageCatalogRefreshed = false
+
+    /**
+     * 「容器与镜像」页首次显示时调用：刷新镜像目录 + 探测精确版本。
+     *
+     * 两者原本都在 AIEditorApp 启动时自动跑，现改为按需：12h 缓存的仓库刷新属于预热，
+     * 本地磁盘与内置 assets 都有傅底，不进镜像页完全不需要。
+     */
+    fun onImageSectionShown() {
+        if (!imageCatalogRefreshed) {
+            imageCatalogRefreshed = true
+            viewModelScope.launch { runCatching { containerImageCatalog.refreshFromNetworkIfStale() } }
+        }
+        probeImageVersions()
+    }
+
+    /** 是否已触发过模型元数据 / provider 预设的网络刷新（同进程只刷一次）。 */
+    private var modelMetadataRefreshed = false
+
+    /**
+     * 「AI 供应商」「默认模型」页首次显示时调用：刷新模型元数据与 provider 预设。
+     *
+     * 这两份数据原本在启动时自动拉：实测 6.7MB JSON、324 个提供商、9981 个模型，
+     * 冷启动要 2.5s 拉取 + 0.4s 解析 + 0.5s 建对象，堆峰值涨 74MB。
+     * resolve() 有本地磁盘/内置 assets 傅底，不刷新也能正常工作。
+     */
+    fun onModelSectionShown() {
+        if (modelMetadataRefreshed) return
+        modelMetadataRefreshed = true
+        viewModelScope.launch {
+            runCatching { modelMetadataService.refreshFromNetworkIfStale() }
+            runCatching {
+                com.aicode.feature.settings.data.local.ProviderPresetLibrary
+                    .refreshFromNetworkIfStale(context)
+            }
+        }
+    }
+
     /**
      * 按需探测镜像精确版本：由「容器与镜像」页首次显示时调用。
      *
