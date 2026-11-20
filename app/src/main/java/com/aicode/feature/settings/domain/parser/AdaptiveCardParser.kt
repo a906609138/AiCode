@@ -8,6 +8,8 @@ import com.aicode.feature.settings.domain.model.BadgeElement
 import com.aicode.feature.settings.domain.model.CardColor
 import com.aicode.feature.settings.domain.model.CardElement
 import com.aicode.feature.settings.domain.model.CardPadding
+import com.aicode.feature.settings.domain.model.ChartElement
+import com.aicode.feature.settings.domain.model.ChartSeries
 import com.aicode.feature.settings.domain.model.CodeBlockElement
 import com.aicode.feature.settings.domain.model.ColumnElement
 import com.aicode.feature.settings.domain.model.ColumnSetElement
