@@ -8,8 +8,11 @@ import com.aicode.feature.settings.domain.model.ChartElement
 import com.aicode.feature.settings.domain.model.ChartSeries
 import com.aicode.feature.settings.domain.model.ContainerElement
 import com.aicode.feature.settings.domain.model.TextBlockElement
+import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -29,32 +32,33 @@ class AdaptiveCardParserTest {
 
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-    private fun chart(bodyElement: String): AdaptiveCardRoot =
+    private fun card(bodyElement: String): AdaptiveCardRoot =
         AdaptiveCardParser.parseAdaptiveCard("{\"body\":[$bodyElement]}")
 
     private fun firstChart(root: AdaptiveCardRoot): ChartElement {
         val element = root.body.firstOrNull()
         assertNotNull("body 里没有元素", element)
-        assertTrue("首个元素不是图表，实际是 ${element::class.simpleName}", element is ChartElement)
+        assertTrue("首个元素不是图表，实际是 ${element?.javaClass?.simpleName}", element is ChartElement)
         return element as ChartElement
     }
 
     @Test
     fun testBarChartParsesCategoriesAndSeries() {
-        val card = chart(
-            """
-            {
-              "type": "Chart",
-              "kind": "bar",
-              "categories": ["周一", "周二", "周三"],
-              "series": [{ "name": "请求", "values": [120, 180, 140] }],
-              "unit": "次",
-              "caption": "近三天请求量"
-            }
-            """.trimIndent()
+        val chart = firstChart(
+            card(
+                """
+                {
+                  "type": "Chart",
+                  "kind": "bar",
+                  "categories": ["周一", "周二", "周三"],
+                  "series": [{ "name": "请求", "values": [120, 180, 140] }],
+                  "unit": "次",
+                  "caption": "近三天请求量"
+                }
+                """.trimIndent()
+            )
         )
 
-        val chart = firstChart(card)
         assertEquals("bar", chart.kind)
         assertEquals(listOf("周一", "周二", "周三"), chart.categories)
         assertEquals(1, chart.series.size)
@@ -69,30 +73,29 @@ class AdaptiveCardParserTest {
     @Test
     fun testChartKindAliasesNormalize() {
         for (raw in listOf("hbar", "h-bar", "horizontal", "HBAR")) {
-            assertEquals("hbar", firstChart(chart("{ \"type\": \"Chart\", \"kind\": \"$raw\" }")).kind)
+            assertEquals("hbar", firstChart(card("{ \"type\": \"Chart\", \"kind\": \"$raw\" }")).kind)
         }
-        assertEquals("line", firstChart(chart("{ \"type\": \"Chart\", \"kind\": \"line\" }")).kind)
-        assertEquals("donut", firstChart(chart("{ \"type\": \"Chart\", \"kind\": \"pie\" }")).kind)
-        assertEquals("donut", firstChart(chart("{ \"type\": \"Chart\", \"kind\": \"ring\" }")).kind)
+        assertEquals("line", firstChart(card("{ \"type\": \"Chart\", \"kind\": \"line\" }")).kind)
+        assertEquals("donut", firstChart(card("{ \"type\": \"Chart\", \"kind\": \"pie\" }")).kind)
+        assertEquals("donut", firstChart(card("{ \"type\": \"Chart\", \"kind\": \"ring\" }")).kind)
         // 无法识别的类型按柱状渲染，不抛异常
-        assertEquals("bar", firstChart(chart("{ \"type\": \"Chart\", \"kind\": \"scatter\" }")).kind)
-        assertEquals("bar", firstChart(chart("{ \"type\": \"Chart\" }")).kind)
+        assertEquals("bar", firstChart(card("{ \"type\": \"Chart\", \"kind\": \"scatter\" }")).kind)
+        assertEquals("bar", firstChart(card("{ \"type\": \"Chart\" }")).kind)
     }
 
     @Test
     fun testChartTypeAliasesAreAccepted() {
         for (type in listOf("chart", "graph", "plot", "barchart", "linechart", "donut")) {
-            val root = chart("""{ "type": "$type", "categories": ["A", "B"], "values": [1, 2] }""")
+            val root = card("""{ "type": "$type", "categories": ["A", "B"], "values": [1, 2] }""")
             assertTrue("type=$type 未识别为图表", root.body.firstOrNull() is ChartElement)
         }
     }
 
     @Test
     fun testChartAcceptsLabelsAndFlatValues() {
-        // labels 别名 + 扁平 data 数组
-        val chart = firstChart(chart(
-            """{ "type": "Chart", "labels": ["X", "Y", "Z"], "data": [10, 20, 30] }"""
-        ))
+        val chart = firstChart(
+            card("""{ "type": "Chart", "labels": ["X", "Y", "Z"], "data": [10, 20, 30] }""")
+        )
         assertEquals(listOf("X", "Y", "Z"), chart.categories)
         assertEquals(1, chart.series.size)
         assertEquals(ChartSeries("", listOf(10f, 20f, 30f), null), chart.series.first())
@@ -100,41 +103,41 @@ class AdaptiveCardParserTest {
 
     @Test
     fun testChartSeriesAcceptsJsonArrayElement() {
-        val chart = firstChart(chart(
-            """{ "type": "Chart", "categories": ["A", "B"], "series": [[1.5, 2.5]] }"""
-        ))
+        val chart = firstChart(
+            card("""{ "type": "Chart", "categories": ["A", "B"], "series": [[1.5, 2.5]] }""")
+        )
         assertEquals(ChartSeries("", listOf(1.5f, 2.5f), null), chart.series.first())
     }
 
     @Test
     fun testChartSeriesCustomColor() {
-        val chart = firstChart(chart(
-            """{ "type": "Chart", "categories": ["A"], "series": [{ "values": [1], "color": "#ff0000" }] }"""
-        ))
+        val chart = firstChart(
+            card("""{ "type": "Chart", "categories": ["A"], "series": [{ "values": [1], "color": "#ff0000" }] }""")
+        )
         assertEquals(CardColor.Custom("#ff0000"), chart.series.first().color)
     }
 
     @Test
     fun testChartShowValuesAndLegendToggle() {
-        val chart = firstChart(chart(
-            """{"type":"Chart","showValues":false,"showLegend":false,"series":[{"values":[1]}]}"""
-        ))
+        val chart = firstChart(
+            card("""{"type":"Chart","showValues":false,"showLegend":false,"series":[{"values":[1]}]}""")
+        )
         assertFalse(chart.showValues)
         assertFalse(chart.showLegend)
     }
 
     @Test
     fun testChartMinMaxAndHeight() {
-        val chart = firstChart(chart(
-            """{"type":"Chart","height":200,"minValue":0,"maxValue":1000,"series":[{"values":[5]}]}"""
-        ))
+        val chart = firstChart(
+            card("""{"type":"Chart","height":200,"minValue":0,"maxValue":1000,"series":[{"values":[5]}]}""")
+        )
         assertEquals(200, chart.heightDp)
         assertEquals(0f, chart.minValue!!)
         assertEquals(1000f, chart.maxValue!!)
     }
 
     @Test
-    fun testChartInsideContainerAndColumn() {
+    fun testChartInsideContainer() {
         val root = AdaptiveCardParser.parseAdaptiveCard(
             """
             {"body":[{"type":"Container","items":[
@@ -151,14 +154,14 @@ class AdaptiveCardParserTest {
 
     @Test
     fun testVisibleFalseChartIsSkipped() {
-        val root = chart(
+        val root = card(
             """{ "type": "Chart", "visible": false, "categories": ["A"], "series": [{"values": [1]}] }"""
         )
         assertTrue("visible=false 的图表不应渲染", root.body.isEmpty())
     }
 
     @Test
-    fun testShowCardToolParsesObjectDirectly() {
+    fun testShowCardToolParsesObjectDirectly() = runTest {
         val cardObject = json.parseToJsonElement(
             """{"body":[{"type":"Chart","kind":"donut","categories":["甲","乙"],"series":[{"values":[6,4]}]}]}"""
         )
@@ -166,22 +169,23 @@ class AdaptiveCardParserTest {
         assertTrue(result is ToolResult.Success)
 
         val data = (result as ToolResult.Success).data.jsonObject
-        assertTrue(data["rendered"]!!.asBool())
-        assertEquals(1, data["elements"]!!.asInt())
+        assertTrue((data["rendered"] as JsonPrimitive).booleanOrNull == true)
+        assertEquals(1, (data["elements"] as JsonPrimitive).intOrNull)
 
-        val card = data["card"]!!.jsonObject["body"]!!.jsonArray().first().jsonObject
-        assertEquals("Chart", card["type"]!!.jsonPrimitive.content)
-        assertEquals("donut", card["kind"]!!.jsonPrimitive.content)
+        val body = (data["card"] as kotlinx.serialization.json.JsonObject)["body"]!!
+        val first = body.jsonArray.first().jsonObject
+        assertEquals("Chart", first["type"]!!.jsonPrimitive.content)
+        assertEquals("donut", first["kind"]!!.jsonPrimitive.content)
     }
 
     @Test
-    fun testShowCardToolAcceptsStringCard() {
+    fun testShowCardToolAcceptsStringCard() = runTest {
         val raw = JsonPrimitive("""{"body":[{"type":"Metric","label":"余额","value":"18.42"}]}""")
         assertTrue(ShowCardTool().execute(mapOf("card" to raw)) is ToolResult.Success)
     }
 
     @Test
-    fun testShowCardToolRejectsMissingOrEmptyCard() {
+    fun testShowCardToolRejectsMissingOrEmptyCard() = runTest {
         assertTrue(ShowCardTool().execute(emptyMap()) is ToolResult.Error)
         assertTrue(ShowCardTool().execute(mapOf("card" to json.parseToJsonElement("{}"))) is ToolResult.Error)
         assertTrue(
@@ -211,10 +215,4 @@ class AdaptiveCardParserTest {
         assertEquals(0, AdaptiveCardParser.parseAdaptiveCard("").body.size)
         assertEquals(0, AdaptiveCardParser.parseAdaptiveCard("没有 JSON").body.size)
     }
-
-    private fun kotlinx.serialization.json.JsonElement.asBool(): Boolean =
-        (this as? kotlinx.serialization.json.JsonPrimitive)?.booleanOrNull ?: false
-
-    private fun kotlinx.serialization.json.JsonElement.asInt(): Int =
-        (this as? kotlinx.serialization.json.JsonPrimitive)?.intOrNull ?: 0
 }
