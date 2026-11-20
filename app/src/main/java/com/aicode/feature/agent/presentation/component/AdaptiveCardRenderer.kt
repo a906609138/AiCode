@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -44,6 +45,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -64,6 +75,8 @@ import com.aicode.feature.settings.domain.model.ActionButtonElement
 import com.aicode.feature.settings.domain.model.BadgeElement
 import com.aicode.feature.settings.domain.model.CardColor
 import com.aicode.feature.settings.domain.model.CardPadding
+import com.aicode.feature.settings.domain.model.ChartElement
+import com.aicode.feature.settings.domain.model.ChartSeries
 import com.aicode.feature.settings.domain.model.ColumnElement
 import com.aicode.feature.settings.domain.model.ColumnSetElement
 import com.aicode.feature.settings.domain.model.ColumnWidth
@@ -201,6 +214,7 @@ private fun RenderElement(
         is TextBlockElement -> RenderTextBlock(element, isCompact, modifier)
         is ProgressBarElement -> RenderProgressBar(element, isCompact, modifier)
         is MetricElement -> RenderMetric(element, isCompact, modifier)
+        is ChartElement -> RenderChart(element, modifier)
         is BadgeElement -> RenderBadge(element, modifier)
         is StatusDotElement -> RenderStatusDot(element, modifier)
         is FactSetElement -> RenderFactSet(element, modifier)
@@ -1124,6 +1138,450 @@ private fun resolveIcon(name: String): androidx.compose.ui.graphics.vector.Image
         "copy" -> FeatherIcons.Copy
         "help", "help-circle", "question" -> FeatherIcons.HelpCircle
         else -> null
+    }
+}
+
+/* ───────────────────────────── 图表 ───────────────────────────── */
+
+/** 图表配色：语义色优先，保证明暗主题下都可读。 */
+@Composable
+private fun chartPalette(): List<Color> {
+    val semantic = MaterialTheme.semanticColors
+    return listOf(
+        MaterialTheme.colorScheme.primary,
+        semantic.success,
+        semantic.warning,
+        semantic.info,
+        MaterialTheme.colorScheme.tertiary,
+        MaterialTheme.colorScheme.error
+    )
+}
+
+private fun formatChartValue(value: Float, unit: String): String {
+    val abs = kotlin.math.abs(value)
+    val body = when {
+        abs >= 1000f -> String.format(java.util.Locale.US, "%.0f", value)
+        abs >= 10f -> String.format(java.util.Locale.US, "%.0f", value)
+        abs == abs.toInt().toFloat() -> abs.toInt().toString()
+        else -> String.format(java.util.Locale.US, "%.1f", value)
+    }
+    return if (unit.isBlank()) body else "$body$unit"
+}
+
+@Composable
+private fun RenderChart(
+    element: ChartElement,
+    modifier: Modifier = Modifier
+) {
+    val series = element.series.filter { it.values.isNotEmpty() }
+    if (series.isEmpty()) return
+    val count = maxOf(element.categories.size, series.maxOf { it.values.size })
+    if (count <= 0) return
+    val categories = List(count) { element.categories.getOrNull(it).orEmpty() }
+    val palette = chartPalette()
+    // 逐个解析配色：resolveColor 是 @Composable，显式循环比在 map lambda 里调用更稳。
+    val colors = ArrayList<Color>(series.size)
+    for (index in series.indices) {
+        val custom = series[index].color
+        colors.add(if (custom == null) palette[index % palette.size] else resolveColor(custom, isSubtle = false))
+    }
+    val measurer = rememberTextMeasurer()
+    val labelStyle = TextStyle(
+        fontSize = 10.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    val valueStyle = TextStyle(
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.onSurface
+    )
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .applyPadding(element.padding)
+            .applyMargin(element.margin)
+    ) {
+        val kind = element.kind
+        if (element.showLegend && series.size > 1 && kind != "donut") {
+            ChartLegend(series, colors)
+        }
+        when (kind) {
+            "donut" -> DonutChart(
+                categories = categories,
+                values = series.first().values,
+                colors = colors,
+                unit = element.unit,
+                showValues = element.showValues,
+                measurer = measurer,
+                valueStyle = valueStyle,
+                labelStyle = labelStyle
+            )
+            "hbar" -> HorizontalBarChart(
+                categories = categories,
+                series = series,
+                colors = colors,
+                unit = element.unit,
+                showValues = element.showValues,
+                heightDp = element.heightDp,
+                measurer = measurer,
+                labelStyle = labelStyle,
+                valueStyle = valueStyle
+            )
+            "line" -> LineChart(
+                categories = categories,
+                series = series,
+                colors = colors,
+                unit = element.unit,
+                showValues = element.showValues,
+                heightDp = element.heightDp,
+                minValue = element.minValue,
+                maxValue = element.maxValue,
+                measurer = measurer,
+                labelStyle = labelStyle,
+                valueStyle = valueStyle
+            )
+            else -> VerticalBarChart(
+                categories = categories,
+                series = series,
+                colors = colors,
+                unit = element.unit,
+                showValues = element.showValues,
+                heightDp = element.heightDp,
+                minValue = element.minValue,
+                maxValue = element.maxValue,
+                measurer = measurer,
+                labelStyle = labelStyle,
+                valueStyle = valueStyle
+            )
+        }
+        if (element.caption.isNotBlank()) {
+            Spacer(Modifier.height(Spacing.xs))
+            Text(
+                text = element.caption,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChartLegend(series: List<ChartSeries>, colors: List<Color>) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = Spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        series.forEachIndexed { index, one ->
+            Row(
+                modifier = Modifier.weight(1f, fill = false),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(colors[index])
+                )
+                Text(
+                    text = one.name.ifBlank { "—" },
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VerticalBarChart(
+    categories: List<String>,
+    series: List<ChartSeries>,
+    colors: List<Color>,
+    unit: String,
+    showValues: Boolean,
+    heightDp: Int,
+    minValue: Float?,
+    maxValue: Float?,
+    measurer: TextMeasurer,
+    labelStyle: TextStyle,
+    valueStyle: TextStyle
+) {
+    Canvas(modifier = Modifier.fillMaxWidth().height(heightDp.dp)) {
+        val count = categories.size
+        if (count == 0) return@Canvas
+        val topPad = if (showValues) 14.dp.toPx() else 4.dp.toPx()
+        val bottomPad = 16.dp.toPx()
+        val plotHeight = (size.height - topPad - bottomPad).coerceAtLeast(8.dp.toPx())
+        val allValues = series.flatMap { it.values }
+        val dataMax = allValues.maxOrNull() ?: 0f
+        val upper = (maxValue ?: dataMax).let { if (it <= 0f) 1f else it }
+        val lower = (minValue ?: minOf(0f, allValues.minOrNull() ?: 0f)).let { minOf(it, upper - 0.0001f) }
+        val range = (upper - lower).takeIf { it > 0f } ?: 1f
+        val groupWidth = size.width / count
+        val barWidth = (groupWidth * 0.6f / series.size).coerceAtLeast(2.dp.toPx())
+
+        categories.forEachIndexed { index, label ->
+            val groupLeft = index * groupWidth
+            series.forEachIndexed { si, one ->
+                val value = one.values.getOrNull(index) ?: 0f
+                val ratio = ((value - lower) / range).coerceIn(0f, 1f)
+                val barHeight = plotHeight * ratio
+                val left = groupLeft + groupWidth * 0.2f + si * barWidth
+                drawRoundRect(
+                    color = colors[si],
+                    topLeft = Offset(left, topPad + plotHeight - barHeight),
+                    size = Size(barWidth * 0.86f, barHeight),
+                    cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                )
+                if (showValues && barWidth > 16.dp.toPx()) {
+                    val layout = measurer.measure(formatChartValue(value, unit), valueStyle)
+                    drawText(
+                        textLayoutResult = layout,
+                        topLeft = Offset(
+                            left + barWidth * 0.43f - layout.size.width / 2f,
+                            (topPad + plotHeight - barHeight - layout.size.height - 1.dp.toPx())
+                                .coerceAtLeast(0f)
+                        )
+                    )
+                }
+            }
+            val labelLayout = measurer.measure(label, labelStyle)
+            if (labelLayout.size.width <= groupWidth * 1.8f) {
+                drawText(
+                    textLayoutResult = labelLayout,
+                    topLeft = Offset(
+                        groupLeft + groupWidth / 2f - labelLayout.size.width / 2f,
+                        size.height - bottomPad + 3.dp.toPx()
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HorizontalBarChart(
+    categories: List<String>,
+    series: List<ChartSeries>,
+    colors: List<Color>,
+    unit: String,
+    showValues: Boolean,
+    heightDp: Int,
+    measurer: TextMeasurer,
+    labelStyle: TextStyle,
+    valueStyle: TextStyle
+) {
+    val rowHeight = (heightDp / categories.size.coerceAtLeast(1)).coerceIn(20, 34)
+    Canvas(modifier = Modifier.fillMaxWidth().height((rowHeight * categories.size).dp)) {
+        if (categories.isEmpty()) return@Canvas
+        val allValues = series.flatMap { it.values }
+        val peak = (allValues.maxOrNull() ?: 0f).let { if (it <= 0f) 1f else it }
+        val rowPx = size.height / categories.size
+        val labelWidth = categories
+            .map { measurer.measure(it, labelStyle).size.width.toFloat() }
+            .maxOrNull()
+            ?.coerceAtMost(size.width * 0.34f)
+            ?: 0f
+        val valuePadding = if (showValues) 42.dp.toPx() else 4.dp.toPx()
+        val barArea = (size.width - labelWidth - valuePadding - 6.dp.toPx()).coerceAtLeast(8.dp.toPx())
+        val barHeight = (rowPx * 0.52f / series.size).coerceAtLeast(3.dp.toPx())
+
+        categories.forEachIndexed { index, label ->
+            val rowTop = index * rowPx
+            val labelLayout = measurer.measure(label, labelStyle)
+            drawText(
+                textLayoutResult = labelLayout,
+                topLeft = Offset(
+                    (labelWidth - labelLayout.size.width).coerceAtLeast(0f),
+                    rowTop + (rowPx - labelLayout.size.height) / 2f
+                )
+            )
+            series.forEachIndexed { si, one ->
+                val value = one.values.getOrNull(index) ?: 0f
+                val length = (barArea * (value / peak).coerceIn(0f, 1f)).coerceAtLeast(0f)
+                val top = rowTop + rowPx / 2f - (barHeight * series.size) / 2f + si * barHeight
+                drawRoundRect(
+                    color = colors[si].copy(alpha = 0.28f),
+                    topLeft = Offset(labelWidth + 4.dp.toPx(), top),
+                    size = Size(barArea, barHeight * 0.86f),
+                    cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                )
+                drawRoundRect(
+                    color = colors[si],
+                    topLeft = Offset(labelWidth + 4.dp.toPx(), top),
+                    size = Size(length, barHeight * 0.86f),
+                    cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx())
+                )
+                if (showValues && si == series.size - 1) {
+                    val valueLayout = measurer.measure(formatChartValue(value, unit), valueStyle)
+                    drawText(
+                        textLayoutResult = valueLayout,
+                        topLeft = Offset(
+                            (labelWidth + 6.dp.toPx() + length)
+                                .coerceAtMost(size.width - valueLayout.size.width),
+                            rowTop + (rowPx - valueLayout.size.height) / 2f
+                        )
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LineChart(
+    categories: List<String>,
+    series: List<ChartSeries>,
+    colors: List<Color>,
+    unit: String,
+    showValues: Boolean,
+    heightDp: Int,
+    minValue: Float?,
+    maxValue: Float?,
+    measurer: TextMeasurer,
+    labelStyle: TextStyle,
+    valueStyle: TextStyle
+) {
+    Canvas(modifier = Modifier.fillMaxWidth().height(heightDp.dp)) {
+        val count = categories.size
+        if (count == 0) return@Canvas
+        val topPad = if (showValues) 14.dp.toPx() else 4.dp.toPx()
+        val bottomPad = 16.dp.toPx()
+        val plotHeight = (size.height - topPad - bottomPad).coerceAtLeast(8.dp.toPx())
+        val allValues = series.flatMap { it.values }
+        val dataMax = allValues.maxOrNull() ?: 0f
+        val upper = (maxValue ?: dataMax).let { if (it <= 0f) 1f else it }
+        val lower = (minValue ?: minOf(0f, allValues.minOrNull() ?: 0f)).let { minOf(it, upper - 0.0001f) }
+        val range = (upper - lower).takeIf { it > 0f } ?: 1f
+        fun xOf(index: Int): Float =
+            if (count == 1) size.width / 2f else index * (size.width / (count - 1))
+        fun yOf(value: Float): Float =
+            topPad + plotHeight * (1f - ((value - lower) / range).coerceIn(0f, 1f))
+
+        series.forEachIndexed { si, one ->
+            val path = Path()
+            one.values.forEachIndexed { index, value ->
+                val x = xOf(index)
+                val y = yOf(value)
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(
+                path = path,
+                color = colors[si],
+                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+            )
+            one.values.forEachIndexed { index, value ->
+                val x = xOf(index)
+                val y = yOf(value)
+                drawCircle(color = colors[si], radius = 2.5.dp.toPx(), center = Offset(x, y))
+                if (showValues && series.size == 1) {
+                    val layout = measurer.measure(formatChartValue(value, unit), valueStyle)
+                    drawText(
+                        textLayoutResult = layout,
+                        topLeft = Offset(
+                            (x - layout.size.width / 2f).coerceIn(0f, (size.width - layout.size.width).coerceAtLeast(0f)),
+                            (y - layout.size.height - 3.dp.toPx()).coerceAtLeast(0f)
+                        )
+                    )
+                }
+            }
+        }
+        categories.forEachIndexed { index, label ->
+            val layout = measurer.measure(label, labelStyle)
+            if (layout.size.width <= size.width / count * 1.8f) {
+                drawText(
+                    textLayoutResult = layout,
+                    topLeft = Offset(
+                        (xOf(index) - layout.size.width / 2f)
+                            .coerceIn(0f, (size.width - layout.size.width).coerceAtLeast(0f)),
+                        size.height - bottomPad + 3.dp.toPx()
+                    )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DonutChart(
+    categories: List<String>,
+    values: List<Float>,
+    colors: List<Color>,
+    unit: String,
+    showValues: Boolean,
+    measurer: TextMeasurer,
+    valueStyle: TextStyle,
+    labelStyle: TextStyle
+) {
+    val total = values.sum().takeIf { it > 0f } ?: 1f
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Canvas(modifier = Modifier.size(112.dp)) {
+            var startAngle = -90f
+            values.forEachIndexed { index, value ->
+                val sweep = value / total * 360f
+                drawArc(
+                    color = colors[index % colors.size],
+                    startAngle = startAngle,
+                    sweepAngle = (sweep - 1.2f).coerceAtLeast(0.6f),
+                    useCenter = false,
+                    style = Stroke(width = 15.dp.toPx(), cap = StrokeCap.Butt)
+                )
+                startAngle += sweep
+            }
+            val centerLayout = measurer.measure(
+                formatChartValue(total, unit),
+                valueStyle.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            )
+            drawText(
+                textLayoutResult = centerLayout,
+                topLeft = Offset(
+                    (size.width - centerLayout.size.width) / 2f,
+                    (size.height - centerLayout.size.height) / 2f
+                )
+            )
+        }
+        Spacer(Modifier.width(Spacing.md))
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            categories.forEachIndexed { index, label ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(colors[index % colors.size])
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = label,
+                        style = labelStyle,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (showValues) {
+                        Text(
+                            text = formatChartValue(values.getOrNull(index) ?: 0f, unit),
+                            style = valueStyle,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

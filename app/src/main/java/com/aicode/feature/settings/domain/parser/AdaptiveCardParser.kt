@@ -8,6 +8,8 @@ import com.aicode.feature.settings.domain.model.BadgeElement
 import com.aicode.feature.settings.domain.model.CardColor
 import com.aicode.feature.settings.domain.model.CardElement
 import com.aicode.feature.settings.domain.model.CardPadding
+import com.aicode.feature.settings.domain.model.ChartElement
+import com.aicode.feature.settings.domain.model.ChartSeries
 import com.aicode.feature.settings.domain.model.CodeBlockElement
 import com.aicode.feature.settings.domain.model.ColumnElement
 import com.aicode.feature.settings.domain.model.ColumnSetElement
@@ -145,6 +147,7 @@ object AdaptiveCardParser {
             "input.list", "parameterlist", "params" -> parseInputList(obj)
             "code", "codeblock", "script" -> parseCodeBlock(obj)
             "markdown", "richtext", "doc" -> parseMarkdownBlock(obj)
+            "chart", "graph", "plot", "barchart", "linechart", "donut" -> parseChart(obj)
             else -> parseTextBlock(obj)
         }
     }
@@ -751,6 +754,75 @@ object AdaptiveCardParser {
         return null
     }
 
+    private fun parseChart(obj: JsonObject): ChartElement {
+        val kind = (obj["kind"] ?: obj["chartType"] ?: obj["chart_type"] ?: obj["type"])
+            ?.primitiveStringOrNull()?.trim()?.lowercase()
+            // 允许 h-bar / h_bar / line_chart 这类写法
+            ?.replace("-", "")?.replace("_", "")?.replace(" ", "")
+            ?.let {
+                when {
+                    it.contains("donut") || it.contains("pie") || it.contains("ring") -> "donut"
+                    it.contains("hbar") || it.contains("horizontal") -> "hbar"
+                    it.contains("line") || it.contains("area") -> "line"
+                    it.contains("bar") || it.contains("column") -> "bar"
+                    else -> "bar"
+                }
+            } ?: "bar"
+
+        val categories = mutableListOf<String>()
+        (obj["categories"] as? JsonArray ?: obj["labels"] as? JsonArray)?.forEach { item ->
+            categories.add(item.primitiveStringOrNull().orEmpty())
+        }
+
+        val series = mutableListOf<ChartSeries>()
+        (obj["series"] as? JsonArray)?.forEach { item ->
+            when (item) {
+                is JsonObject -> {
+                    val values = mutableListOf<Float>()
+                    (item["values"] as? JsonArray ?: item["data"] as? JsonArray)?.forEach { v ->
+                        values.add(v.primitiveDoubleOrNull()?.toFloat() ?: 0f)
+                    }
+                    series.add(
+                        ChartSeries(
+                            name = (item["name"] ?: item["label"] ?: item["title"])?.primitiveStringOrNull().orEmpty(),
+                            values = values,
+                            color = CardColor.fromString(item["color"]?.primitiveStringOrNull())
+                                .takeIf { it != CardColor.Default }
+                        )
+                    )
+                }
+                is JsonArray -> {
+                    series.add(ChartSeries(values = item.map { v -> v.primitiveDoubleOrNull()?.toFloat() ?: 0f }))
+                }
+                else -> Unit
+            }
+        }
+
+        // 兼容扁平写法：data/values: [1,2,3] 视作单一无名字列
+        if (series.isEmpty()) {
+            val flat = obj["values"] as? JsonArray ?: obj["data"] as? JsonArray
+            if (flat != null) {
+                series.add(ChartSeries(values = flat.map { v -> v.primitiveDoubleOrNull()?.toFloat() ?: 0f }))
+            }
+        }
+
+        return ChartElement(
+            kind = kind,
+            categories = categories,
+            series = series,
+            unit = (obj["unit"] ?: obj["suffix"])?.primitiveStringOrNull().orEmpty(),
+            caption = (obj["caption"] ?: obj["description"] ?: obj["note"])?.primitiveStringOrNull().orEmpty(),
+            heightDp = parseDpOrNull(obj["height"] ?: obj["heightDp"]) ?: 150,
+            showValues = obj["showValues"]?.primitiveBooleanOrNull()
+                ?: obj["show_values"]?.primitiveBooleanOrNull() ?: true,
+            showLegend = obj["showLegend"]?.primitiveBooleanOrNull()
+                ?: obj["show_legend"]?.primitiveBooleanOrNull() ?: true,
+            minValue = obj["minValue"]?.primitiveDoubleOrNull()?.toFloat(),
+            maxValue = obj["maxValue"]?.primitiveDoubleOrNull()?.toFloat(),
+            padding = parsePadding(obj["padding"]),
+            margin = parsePadding(obj["margin"])
+        )
+    }
     private fun parseDpOrNull(element: JsonElement?): Int? {
         if (element == null) return null
         if (element is JsonPrimitive) {

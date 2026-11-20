@@ -449,6 +449,47 @@ data class ActionButtonElement(
 ) : AdaptiveCardElement
 
 /**
+ * 图表的一条数据系列。
+ *
+ * [values] 与 [ChartElement.categories] 一一对应，长度不足时缺的按 0 处理，超出的忽略。
+ */
+data class ChartSeries(
+    val name: String = "",
+    val values: List<Float> = emptyList(),
+    val color: CardColor? = null
+)
+
+/**
+ * 图表组件：柱状（bar）、横向条（hbar）、折线（line）、环形（donut）。
+ *
+ * 纯展示，不发起交互；数据在本地渲染，不请求网络。
+ */
+data class ChartElement(
+    /** bar | hbar | line | donut，无法识别时按 bar 渲染 */
+    val kind: String = "bar",
+    /** 分类轴标签 */
+    val categories: List<String> = emptyList(),
+    /** 数据系列，donut 只取第一组 */
+    val series: List<ChartSeries> = emptyList(),
+    /** 数值单位，附在数值标签与图例后 */
+    val unit: String = "",
+    /** 图表底部说明文字 */
+    val caption: String = "",
+    /** 绘图区高度（dp） */
+    val heightDp: Int = 150,
+    /** 是否在柱/线端显示数值 */
+    val showValues: Boolean = true,
+    /** 是否显示多系列图例 */
+    val showLegend: Boolean = true,
+    /** 纵轴下限，缺省取数据最小值与 0 的较小者 */
+    val minValue: Float? = null,
+    /** 纵轴上限，缺省取数据最大值 */
+    val maxValue: Float? = null,
+    val padding: CardPadding? = null,
+    val margin: CardPadding? = null
+) : AdaptiveCardElement
+
+/**
  * 动作操作。
  */
 sealed interface AdaptiveCardAction {

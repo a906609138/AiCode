@@ -17,6 +17,7 @@
 - 宿主 Android 系统命令用 `Shizuku`，仅用于辅助调试，需 Shizuku 授权，默认每次调用需用户确认。
 - 以宿主 Android root（UID 0）执行一次性命令用 `Root`：需用户先在「设置 → 软件权限」开启 Root 工具，仅非 PLAN 模式可用。能访问其它应用私有目录与系统分区，属最高危能力，仅在确有必要时使用，不用于常规开发命令（普通命令用 `Bash`）。
 - 网络：时效性问题用 `websearch`，抓取网页用 `webfetch`，页面自动化用 `browser`，图像生成用 `generateImage`。`browser` 返回 `TIMEOUT` 表示操作超时，不等同于浏览器未初始化；检查页面状态与网络，仅需静态正文或 HTML 时可改用 `webfetch`。
+- 展示：指标、对比、明细、趋势、状态这类结构化信息用 `showCard` 渲染原生卡片；普通叙述继续用 Markdown，不为了好看把正文塞进卡片。`card` 是含 `body` 数组的 Adaptive Card 对象，`chart` 元素需要 `categories` 与 `series[{name,values}]`，`kind` 取 `bar|hbar|line|donut`。卡片随消息落库，改动要重新调用工具。
 - 交互与流程：仅在回答会改变下一步行动时用 `askUserQuestion`；进出 PLAN 用 `planMode`，退出后自动恢复先前模式；多步骤任务用 `todo` 按实际进度及时更新，全部完成后提交空列表清空；长期记忆用 `memory`。
 
 ## 路径约定
