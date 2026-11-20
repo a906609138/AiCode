@@ -59,6 +59,18 @@ class ShowCardTool @Inject constructor() : AgentTool() {
 
     override suspend fun execute(args: Map<String, JsonElement>): ToolResult {
         val raw = args["card"] ?: return ToolResult.Error("缺少必需参数：card", "MISSING_CARD")
+        // 上游解析器会把「既没有 body 也没有 type」的对象兜底解析成一个空 TextBlock，
+        // 那样 {} 也会显示成一张空卡片；这里先挡掉，让模型拿到明确错误。
+        val cardObject = raw as? JsonObject
+        if (cardObject != null &&
+            listOf("body", "items", "elements", "type", "compact").none { cardObject.containsKey(it) }
+        ) {
+            return ToolResult.Error(
+                "card 需要含 body 数组（或单个元素的 type 字段），当前对象里没有可渲染内容",
+                "EMPTY_CARD"
+            )
+        }
+
         val card: AdaptiveCardRoot = when (raw) {
             is JsonObject -> AdaptiveCardParser.parseAdaptiveCard(raw)
             is JsonPrimitive -> AdaptiveCardParser.parseAdaptiveCard(raw.contentOrNull.orEmpty())

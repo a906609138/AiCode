@@ -757,6 +757,8 @@ object AdaptiveCardParser {
     private fun parseChart(obj: JsonObject): ChartElement {
         val kind = (obj["kind"] ?: obj["chartType"] ?: obj["chart_type"] ?: obj["type"])
             ?.primitiveStringOrNull()?.trim()?.lowercase()
+            // 允许 h-bar / h_bar / line_chart 这类写法
+            ?.replace("-", "")?.replace("_", "")?.replace(" ", "")
             ?.let {
                 when {
                     it.contains("donut") || it.contains("pie") || it.contains("ring") -> "donut"
