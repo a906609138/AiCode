@@ -2,6 +2,7 @@ package com.aicode.feature.settings.domain.parser
 
 import com.aicode.feature.agent.domain.tool.ToolResult
 import com.aicode.feature.agent.domain.tool.card.ShowCardTool
+import com.aicode.feature.settings.domain.model.AdaptiveCardRoot
 import com.aicode.feature.settings.domain.model.CardColor
 import com.aicode.feature.settings.domain.model.ChartElement
 import com.aicode.feature.settings.domain.model.ChartSeries
