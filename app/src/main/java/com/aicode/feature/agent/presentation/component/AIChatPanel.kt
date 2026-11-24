@@ -285,8 +285,8 @@ private val ToolGroupMemberPadding = PaddingValues(start = 16.dp)
  * 折进「N 次工具调用」后随分组默认收起，等于把发来的文件藏起来；留作顶层 item 才常显。
  */
 private fun AgentUIMessage.isGroupableTool(): Boolean =
-    role == MessageRole.TOOL && !isCompactionFailure && !isContextSummary &&
-        !isCompactionMarker && !isBackgroundNotification && attachments.isEmpty()
+    role == MessageRole.TOOL && !isOutputTool() && !isCompactionFailure && !isContextSummary &&
+        !isCompactionMarker && !isBackgroundNotification
 
 /** 分组标识：取组内首条消息 id，保证一批工具调用在追加过程中 item key 稳定（不会重建导致视口跳动）。 */
 private fun toolGroupKey(first: AgentUIMessage): String = "toolgroup:${first.id}"
@@ -517,12 +517,26 @@ private fun splitChatTurns(messages: List<AgentUIMessage>): Pair<List<AgentUIMes
 /**
  * 该消息在整轮折叠里是否「常显」——不参与过程折叠，无论轮展开与否都显示。
  *
- * 仅限带附件的工具（sendFile / generateImage 产出的文件行）：文件就是结果本身，折进
- * 「N 次工具调用」或整轮折叠等于把产出物藏起来。后台通知与压缩卡片是过程性提示，
- * 随过程一起折叠（见 [isSystemCardInTurn]）。
+ * 覆盖带附件的工具（sendFile / generateImage 产出的文件行）与产出原生卡片的工具（showCard）：
+ * 文件与卡片就是结果本身，折进「N 次工具调用」或整轮折叠等于把产出物藏起来。后台通知与压缩
+ * 卡片是过程性提示，随过程一起折叠（见 [isSystemCardInTurn]）。
  */
-private fun AgentUIMessage.isPersistentInTurn(): Boolean =
-    role == MessageRole.TOOL && attachments.isNotEmpty()
+private fun AgentUIMessage.isPersistentInTurn(): Boolean = isOutputTool()
+
+/**
+ * 产出物本身就是内容、必须常显的工具：文件行（sendFile / generateImage 的附件）与原生卡片
+ * （showCard 渲染的图表、指标块等）。
+ *
+ * 两者都不该折进「N 次工具调用」或整轮过程折叠 —— 折进去等于把产出藏起来，用户得先展开
+ * 才知道 AI 画了什么。卡片与附件的区别只是数据放在 content JSON 里而非 attachments，
+ * 判定上必须一并覆盖。
+ */
+private fun AgentUIMessage.isOutputTool(): Boolean =
+    role == MessageRole.TOOL &&
+        (attachments.isNotEmpty() || toolName == SHOW_CARD_TOOL)
+
+/** 渲染原生卡片的工具名。与 [com.aicode.feature.agent.domain.tool.card.ShowCardTool] 的 name 对应。 */
+private const val SHOW_CARD_TOOL = "showCard"
 
 /**
  * 系统注入的卡片型消息（后台通知条 / 压缩标记·摘要·失败）：折进轮过程，且不得被选为
