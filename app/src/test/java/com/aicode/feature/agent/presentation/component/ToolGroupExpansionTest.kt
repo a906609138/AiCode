@@ -180,6 +180,38 @@ class ToolGroupExpansionTest {
         assertFalse(groups.any { group -> group.toolGroup.orEmpty().any { it.id == "send" } })
     }
 
+    @Test
+    fun showCardTool_isNotGroupedAndStaysVisible() {
+        // showCard 渲染的卡片本身就是产出（图表、指标块）：和附件一样不参与「N 次工具调用」，
+        // 也不参与整轮折叠，否则用户得先展开折叠头才知道 AI 画了什么。
+        val cardContent = """{"status":"success","data":{"card":{"body":[{"type":"Chart"}]}}}"""
+        val messages = listOf(
+            user("u0"),
+            tool("t1"), tool("t2"),
+            tool("card").copy(toolName = "showCard", content = cardContent),
+            tool("t3"), tool("t4"),
+        )
+        val items = items(messages, activeTurnKey = "turn:u0")
+
+        assertTrue("卡片是顶层常显项", items.any { it.key == "card" })
+        val groups = items.groupItems()
+        assertEquals(listOf("toolgroup:t1", "toolgroup:t3"), groups.map { it.key })
+        assertFalse(groups.any { group -> group.toolGroup.orEmpty().any { it.id == "card" } })
+    }
+
+    @Test
+    fun showCardTool_withoutAttachmentsStillCountsAsOutput() {
+        // 卡片数据放在 content JSON 里、没有 attachments —— 旧判定只看 attachments，
+        // 于是卡片被当成普通工具折进分组。这条把「无附件的产出工具」也钉住。
+        val plain = tool("plain").copy(toolName = "Bash")
+        val card = tool("card").copy(toolName = "showCard", content = "{}")
+        val messages = listOf(user("u0"), plain, card)
+
+        val items = items(messages, activeTurnKey = "turn:u0")
+        assertTrue("卡片常显", items.any { it.key == "card" })
+        assertTrue("普通工具仍进过程", items.header().turnProcess.any { it.message.id == "plain" })
+    }
+
     // ---- 整轮任务折叠 ----
 
     @Test
